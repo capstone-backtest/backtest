@@ -55,9 +55,9 @@ backtest/
     cp frontend/.env.example frontend/.env
     ```
 
-2.  **Docker 기반 개발(권장)**:
+2.  **개발 환경 (권장 — 자동 오버라이드)**:
 
-    Compose를 사용하면 컨테이너 내에서 개발 서버를 실행하도록 구성되어 있습니다. 프로젝트 루트에서 실행하세요:
+    로컬 개발은 기본 `docker-compose.yml`과 `docker-compose.override.yml`이 자동으로 병합되어 실행됩니다. `override`는 소스 바인드, Vite 개발 서버(5173), uvicorn `--reload` 등 개발용 설정을 포함합니다.
 
     ```bash
     # Docker Compose v1
@@ -67,13 +67,24 @@ backtest/
     docker compose up --build
     ```
 
-    백그라운드 실행을 원하면 `-d`를 추가할 수 있습니다. 이 구성에서는 프론트엔드가 Vite 개발 서버로 실행되며 호스트에서 `http://localhost:5173`로 접속합니다.
+    백그라운드 실행을 원하면 `-d`를 추가하세요. 개발 구성에서는 프론트엔드가 Vite 개발 서버로 동작하므로 브라우저에서 `http://localhost:5173`로 접속합니다.
+
+3.  **프로덕션/미리보기(정적 서빙)**:
+
+    프로덕션 빌드(또는 미리보기)를 위해서는 기본 `docker-compose.yml`과 `docker-compose.prod.yml`을 명시적으로 사용합니다. 이 구성은 프론트엔드를 정적 빌드로 서빙(컨테이너 내부 Nginx, 호스트 포트 8080)합니다.
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+    ```
+
+    또는 `docker compose -f docker-compose.prod.yml up -d --build`로 프로덕션 전용 파일만 사용할 수 있습니다.
 
 ### 애플리케이션 접속
 
 서비스가 실행되면, 웹 브라우저에서 다음 주소로 접속하세요:
 
-- 프론트엔드(Vite 개발 서버): http://localhost:5173
+- 개발(override 적용): 프론트엔드(Vite) http://localhost:5173
+- 프로덕션/미리보기: 프론트엔드 (정적 서빙) http://localhost:8080
 - 백엔드(FastAPI): http://localhost:8000
 
 ## 6. 개발
