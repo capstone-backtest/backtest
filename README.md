@@ -19,7 +19,7 @@
 *   **백엔드**: FastAPI, MySQL, SQLAlchemy, Alembic, backtesting.py, pandas, yfinance, Uvicorn
 *   **프론트엔드**: React 18, TypeScript, Vite, Bootstrap, React Bootstrap, Tailwind CSS, Recharts, Axios
 *   **컨테이너화**: Docker, Docker Compose
-*   **웹 서버**: Nginx
+*   **웹 서버(개발)**: Vite 개발 서버 (프로덕션에서는 정적 빌드를 별도 서버로 서빙 가능)
 
 ## 4. 프로젝트 구조
 
@@ -28,7 +28,7 @@ backtest/
 ├── backend/            # FastAPI 백엔드 API 서버
 ├── frontend/           # React 프론트엔드 대시보드
 ├── database/           # 데이터베이스 초기화 스크립트
-├── nginx/              # 리버스 프록시를 위한 Nginx 설정
+...existing code...
 ├── docker-compose.yml  # Docker Compose 설정
 ├── LICENSE             # 프로젝트 라이선스
 └── README.md           # 프로젝트 루트 README
@@ -55,18 +55,26 @@ backtest/
     cp frontend/.env.example frontend/.env
     ```
 
-2.  **서비스 빌드 및 실행**:
+2.  **Docker 기반 개발(권장)**:
+
+    Compose를 사용하면 컨테이너 내에서 개발 서버를 실행하도록 구성되어 있습니다. 프로젝트 루트에서 실행하세요:
+
     ```bash
     # Docker Compose v1
-    docker-compose up --build -d
+    docker-compose up --build
 
     # 또는 Docker Compose v2 (권장)
-    docker compose up --build -d
+    docker compose up --build
     ```
+
+    백그라운드 실행을 원하면 `-d`를 추가할 수 있습니다. 이 구성에서는 프론트엔드가 Vite 개발 서버로 실행되며 호스트에서 `http://localhost:5173`로 접속합니다.
 
 ### 애플리케이션 접속
 
-스크립트 또는 수동 명령어로 서비스가 모두 실행되면, 웹 브라우저에서 `http://localhost:8080` 주소로 프론트엔드 대시보드에 접속할 수 있습니다.
+서비스가 실행되면, 웹 브라우저에서 다음 주소로 접속하세요:
+
+- 프론트엔드(Vite 개발 서버): http://localhost:5173
+- 백엔드(FastAPI): http://localhost:8000
 
 ## 6. 개발
 
