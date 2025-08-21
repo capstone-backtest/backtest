@@ -4,8 +4,6 @@
 
 이 프로젝트는 주식 투자 전략을 분석하고 최적화하기 위해 설계된 종합적인 백테스팅 플랫폼입니다. FastAPI 기반의 백엔드 API 서버와 React 기반의 프론트엔드 대시보드로 구성되어 있습니다. 사용자는 다양한 투자 전략을 정의하고, 과거 데이터를 기반으로 백테스트를 실행하며, 수익률, 변동성, 최대 낙폭과 같은 성과 지표를 시각화할 수 있습니다.
 
-백테스팅 결과는 MySQL 데이터베이스에 영구적으로 저장됩니다.
-
 ## 2. 주요 기능
 
 *   **전략 백테스팅**: 사용자가 정의한 투자 전략을 과거 주식 데이터에 대해 시뮬레이션합니다.
@@ -45,9 +43,9 @@ backtest/
 *   Docker
 *   Docker Compose
 
-### 간편 실행 스크립트 (권장)
+### 실행
 
-프로젝트 루트 디렉터리에 있는 스크립트를 사용하여 한 번의 명령으로 모든 서비스를 시작할 수 있습니다.
+프로젝트 전체 서비스를 실행하려면 Docker와 Docker Compose가 설치되어 있어야 합니다.
 
 1.  **리포지토리 클론 및 `.env` 파일 생성**:
     ```bash
@@ -56,33 +54,14 @@ backtest/
     cp backend/env.example backend/.env
     cp frontend/.env.example frontend/.env
     ```
-    *참고: `.env` 파일의 내용은 필요에 따라 수정할 수 있습니다.*
-
-2.  **스크립트 실행**:
-
-    *   **Windows:**
-        `start.bat` 파일을 더블클릭하거나 터미널에서 실행합니다.
-        ```bash
-        start.bat
-        ```
-
-    *   **macOS / Linux:**
-        먼저 스크립트에 실행 권한을 부여한 후 실행합니다.
-        ```bash
-        chmod +x start.sh
-        ./start.sh
-        ```
-
-### 수동으로 실행하기
-
-스크립트를 사용하지 않고 직접 Docker Compose 명령어를 실행할 수도 있습니다.
-
-1.  **리포지토리 클론 및 `.env` 파일 생성**: (위와 동일)
 
 2.  **서비스 빌드 및 실행**:
-    프로젝트 루트 디렉터리에서 다음을 실행합니다:
     ```bash
+    # Docker Compose v1
     docker-compose up --build -d
+
+    # 또는 Docker Compose v2 (권장)
+    docker compose up --build -d
     ```
 
 ### 애플리케이션 접속
