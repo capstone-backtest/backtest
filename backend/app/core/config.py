@@ -2,8 +2,9 @@
 API 서버 설정 관리
 """
 from typing import Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 from pydantic import Field
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -21,11 +22,31 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, env="DEBUG")
     
     # CORS 설정
-    backend_cors_origins: list[str] = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://localhost:8080",
-    ]
+    # CORS 설정: read raw env as string and expose a parsed property to avoid
+    # pydantic attempting to json-decode complex env values.
+    backend_cors_origins_str: str = Field(
+        default="http://localhost:3000,http://localhost:8000,http://localhost:8080",
+        env="BACKEND_CORS_ORIGINS",
+    )
+
+    @property
+    def backend_cors_origins(self) -> list[str]:
+        """Return CORS origins as a list. Accepts JSON array or comma-separated string."""
+        v = getattr(self, "backend_cors_origins_str", "")
+        if not v:
+            return []
+        v = v.strip()
+        # try JSON first
+        try:
+            import json
+
+            parsed = json.loads(v)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed]
+        except Exception:
+            pass
+        # fallback: comma-separated
+        return [s.strip() for s in v.split(",") if s.strip()]
     
     # 백테스팅 설정
     default_initial_cash: float = 10000.0
@@ -48,16 +69,15 @@ class Settings(BaseSettings):
     
     # 외부 API 설정
     yahoo_finance_timeout: int = 30
-
-    # Database settings
-    DB_HOST: str = Field(env="DB_HOST")
-    DB_PORT: int = Field(env="DB_PORT")
-    DB_USER: str = Field(env="DB_USER")
-    DB_PASSWORD: str = Field(env="DB_PASSWORD")
-    DB_NAME: str = Field(env="DB_NAME")
-    
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
+    # pydantic v2 configuration
+    model_config = {
+        "env_file": ".env",
+        # allow different env var casing and ignore extra env variables that
+        # may be provided by the container environment
+        "case_sensitive": False,
+        "extra": "ignore",
+    }
 
 
 # 글로벌 설정 인스턴스
-settings = Settings()
+settings = Settings() 

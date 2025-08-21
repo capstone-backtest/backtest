@@ -10,28 +10,29 @@ router = APIRouter()
     "/prices/{symbol}",
     response_model=StockPriceResponse,
     responses={
-        400: {"model": StockPriceError, "description": "Bad Request"},
-        404: {"model": StockPriceError, "description": "Data Not Found"},
-        500: {"model": StockPriceError, "description": "Internal Server Error"}
+        400: {"model": StockPriceError, "description": "잘못된 요청"},
+        404: {"model": StockPriceError, "description": "데이터를 찾을 수 없음"},
+        500: {"model": StockPriceError, "description": "서버 내부 오류"}
     }
 )
 async def get_stock_prices(
     symbol: str,
-    days: Optional[int] = Query(5, ge=1, le=30, description="Number of days to retrieve (1-30 days)")
+    days: Optional[int] = Query(5, ge=1, le=30, description="조회할 일수 (1-30일)")
 ) -> StockPriceResponse:
-    """Retrieves the latest N days of stock price data for a given symbol.
-
+    """
+    주식 종목의 최근 N일간 주가 데이터를 조회합니다.
+    
     Parameters
     ----------
     symbol : str
-        Stock symbol (e.g., "AAPL")
+        주식 심볼 (예: "AAPL")
     days : int, optional
-        Number of days to retrieve (default: 5, max: 30)
+        조회할 일수 (기본값: 5, 최대: 30)
         
     Returns
     -------
     StockPriceResponse
-        Response containing stock price data and metadata
+        주가 데이터와 메타데이터를 포함한 응답
     """
     try:
         # 심볼 검증
@@ -55,5 +56,5 @@ async def get_stock_prices(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Internal Server Error: {str(e)}"
+            detail=f"서버 내부 오류: {str(e)}"
         ) 

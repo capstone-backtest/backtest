@@ -85,7 +85,6 @@ async def startup_event():
     logger.info(f"데이터 캐시 디렉토리: {data_fetcher.cache_dir}")
 
 
-
 @app.on_event("shutdown")
 async def shutdown_event():
     """애플리케이션 종료 시 정리"""
@@ -111,4 +110,4 @@ if __name__ == "__main__":
         port=settings.port,
         reload=settings.debug,
         log_level=settings.log_level.lower()
-    )
+    ) 

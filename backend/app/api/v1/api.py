@@ -1,26 +1,26 @@
 """
-API v1 router integration
+API v1 라우터 통합
 """
 from fastapi import APIRouter
 from .endpoints import backtest, strategies, optimize
 
 api_router = APIRouter()
 
-# Include each endpoint router in the main API router
+# 각 엔드포인트 라우터를 메인 API 라우터에 포함
 api_router.include_router(
     backtest.router,
     prefix="/backtest",
-    tags=["Backtesting"]
+    tags=["백테스팅"]
 )
 
 api_router.include_router(
     strategies.router,
     prefix="/strategies",
-    tags=["Strategy Management"]
+    tags=["전략 관리"]
 )
 
 api_router.include_router(
     optimize.router,
     prefix="/optimize",
-    tags=["Optimization"]
+    tags=["최적화"]
 ) 

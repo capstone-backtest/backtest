@@ -49,7 +49,7 @@ class BacktestRequest(BaseModel):
         return v
 
     class Config:
-        json_schema_extra = {
+        schema_extra = {
             "example": {
                 "ticker": "AAPL",
                 "start_date": "2020-01-01",
@@ -88,7 +88,7 @@ class OptimizationRequest(BaseModel):
         return v
 
     class Config:
-        json_schema_extra = {
+        schema_extra = {
             "example": {
                 "ticker": "AAPL",
                 "start_date": "2020-01-01",
