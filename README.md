@@ -98,4 +98,4 @@ backtest/
 
 ## 7. 라이선스
 
-이 프로젝트는 [MIT 라이선스](LICENSE)에 따라 라이선스가 부여됩니다.
+이 프로젝트는 GNU General Public License v3.0 (GPL-3.0) 기반으로 배포됩니다. 자세한 내용과 저작권 조건은 `LICENSE` 파일을 참조하세요.
