@@ -1,0 +1,17 @@
+2025-08-22 01:51:45.280 | INFO:     Started server process [1]
+2025-08-22 01:51:45.280 | INFO:     Waiting for application startup.
+2025-08-22 01:51:45.280 | 2025-08-21 16:51:45,280 - app.main - INFO - Backtesting API Server v1.0.0 시작됨
+2025-08-22 01:51:45.280 | 2025-08-21 16:51:45,280 - app.main - INFO - 문서 URL: http://0.0.0.0:8000/api/v1/docs
+2025-08-22 01:51:45.281 | 2025-08-21 16:51:45,281 - app.main - INFO - 데이터 캐시 디렉토리: data_cache
+2025-08-22 01:51:45.287 | ERROR:    Traceback (most recent call last):
+2025-08-22 01:51:45.287 |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 677, in lifespan
+2025-08-22 01:51:45.287 |     async with self.lifespan_context(app) as maybe_state:
+2025-08-22 01:51:45.287 |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 566, in __aenter__
+2025-08-22 01:51:45.287 |     await self._router.startup()
+2025-08-22 01:51:45.287 |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 654, in startup
+2025-08-22 01:51:45.287 |     await handler()
+2025-08-22 01:51:45.287 |   File "/app/app/main.py", line 88, in startup_event
+2025-08-22 01:51:45.287 |     from app.db.session import engine
+2025-08-22 01:51:45.287 | ModuleNotFoundError: No module named 'app.db'
+2025-08-22 01:51:45.287 | 
+2025-08-22 01:51:45.287 | ERROR:    Application startup failed. Exiting.
