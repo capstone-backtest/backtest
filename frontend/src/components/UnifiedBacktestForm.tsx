@@ -4,7 +4,7 @@ import { UnifiedBacktestRequest } from '../types/api';
 
 interface Stock {
   symbol: string;
-  weight: number;
+  amount: number;
 }
 
 interface UnifiedBacktestFormProps {
@@ -13,10 +13,9 @@ interface UnifiedBacktestFormProps {
 }
 
 const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loading = false }) => {
-  const [portfolio, setPortfolio] = useState<Stock[]>([{ symbol: '', weight: 1.0 }]);
+  const [portfolio, setPortfolio] = useState<Stock[]>([{ symbol: '', amount: 10000 }]);
   const [startDate, setStartDate] = useState('2023-01-01');
   const [endDate, setEndDate] = useState('2024-12-31');
-  const [initialCapital, setInitialCapital] = useState(10000);
   const [selectedStrategy, setSelectedStrategy] = useState('buy_and_hold');
   const [strategyParams, setStrategyParams] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<string[]>([]);
@@ -79,25 +78,23 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
       validationErrors.push('모든 종목 심볼을 입력해주세요.');
     }
 
-    // 가중치 검사 (여러 종목일 때만)
-    if (portfolio.length > 1) {
-      const totalWeight = portfolio.reduce((sum, stock) => sum + stock.weight, 0);
-      if (Math.abs(totalWeight - 1.0) > 0.001) {
-        validationErrors.push(`가중치 합계는 1.0이어야 합니다. (현재: ${totalWeight.toFixed(3)})`);
-      }
+    // 투자 금액 검사
+    const invalidAmounts = portfolio.filter(stock => stock.amount <= 0);
+    if (invalidAmounts.length > 0) {
+      validationErrors.push('모든 투자 금액은 0보다 커야 합니다.');
     }
 
-    // 개별 가중치 검사
-    const invalidWeights = portfolio.filter(stock => stock.weight <= 0 || stock.weight > 1);
-    if (invalidWeights.length > 0) {
-      validationErrors.push('모든 가중치는 0보다 크고 1.0 이하여야 합니다.');
+    // 총 투자 금액 검사
+    const totalAmount = portfolio.reduce((sum, stock) => sum + stock.amount, 0);
+    if (totalAmount <= 0) {
+      validationErrors.push('총 투자 금액은 0보다 커야 합니다.');
     }
 
     return validationErrors;
   };
 
   const addStock = () => {
-    setPortfolio([...portfolio, { symbol: '', weight: 0 }]);
+    setPortfolio([...portfolio, { symbol: '', amount: 10000 }]);
   };
 
   const removeStock = (index: number) => {
@@ -110,20 +107,19 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
     if (field === 'symbol') {
       newPortfolio[index].symbol = (value as string).toUpperCase();
     } else {
-      newPortfolio[index].weight = Number(value);
+      newPortfolio[index].amount = Number(value);
     }
     setPortfolio(newPortfolio);
   };
 
-  const normalizeWeights = () => {
-    const totalWeight = portfolio.reduce((sum, stock) => sum + stock.weight, 0);
-    if (totalWeight > 0) {
-      const normalizedPortfolio = portfolio.map(stock => ({
-        ...stock,
-        weight: stock.weight / totalWeight
-      }));
-      setPortfolio(normalizedPortfolio);
-    }
+  const distributeEqually = () => {
+    const totalAmount = portfolio.reduce((sum, stock) => sum + stock.amount, 0);
+    const averageAmount = totalAmount / portfolio.length;
+    const distributedPortfolio = portfolio.map(stock => ({
+      ...stock,
+      amount: averageAmount
+    }));
+    setPortfolio(distributedPortfolio);
   };
 
   const updateStrategyParam = (key: string, value: any) => {
@@ -163,7 +159,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
       // 포트폴리오 데이터 준비
       const portfolioData = portfolio.map(stock => ({
         symbol: stock.symbol.toUpperCase(),
-        weight: portfolio.length === 1 ? 1.0 : stock.weight // 단일 종목일 때는 가중치 1.0
+        amount: stock.amount
       }));
 
       const params = generateStrategyParams();
@@ -173,7 +169,6 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
         portfolio: portfolioData,
         start_date: startDate,
         end_date: endDate,
-        initial_capital: initialCapital,
         strategy: selectedStrategy || 'buy_and_hold',
         strategy_params: params
       });
@@ -226,7 +221,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
     );
   };
 
-  const totalWeight = portfolio.reduce((sum, stock) => sum + stock.weight, 0);
+  const totalAmount = portfolio.reduce((sum, stock) => sum + stock.amount, 0);
 
   return (
     <Container>
@@ -255,8 +250,8 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                   <thead>
                     <tr>
                       <th>종목 심볼</th>
-                      {portfolio.length > 1 && <th>가중치</th>}
-                      {portfolio.length > 1 && <th>비중 (%)</th>}
+                      <th>투자 금액 ($)</th>
+                      <th>비중 (%)</th>
                       <th>작업</th>
                     </tr>
                   </thead>
@@ -272,21 +267,18 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                             maxLength={10}
                           />
                         </td>
-                        {portfolio.length > 1 && (
-                          <td>
-                            <Form.Control
-                              type="number"
-                              value={stock.weight}
-                              onChange={(e) => updateStock(index, 'weight', e.target.value)}
-                              step="0.001"
-                              min="0"
-                              max="1"
-                            />
-                          </td>
-                        )}
-                        {portfolio.length > 1 && (
-                          <td>{(stock.weight * 100).toFixed(1)}%</td>
-                        )}
+                        <td>
+                          <Form.Control
+                            type="number"
+                            value={stock.amount}
+                            onChange={(e) => updateStock(index, 'amount', e.target.value)}
+                            step="100"
+                            min="1"
+                          />
+                        </td>
+                        <td>
+                          {totalAmount > 0 ? ((stock.amount / totalAmount) * 100).toFixed(1) : 0}%
+                        </td>
                         <td>
                           <Button
                             variant="outline-danger"
@@ -300,20 +292,14 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                       </tr>
                     ))}
                   </tbody>
-                  {portfolio.length > 1 && (
-                    <tfoot>
-                      <tr>
-                        <th>합계</th>
-                        <th>{totalWeight.toFixed(3)}</th>
-                        <th>{(totalWeight * 100).toFixed(1)}%</th>
-                        <th>
-                          {Math.abs(totalWeight - 1.0) > 0.001 && (
-                            <span className="text-warning"> 합계 불일치</span>
-                          )}
-                        </th>
-                      </tr>
-                    </tfoot>
-                  )}
+                  <tfoot>
+                    <tr>
+                      <th>합계</th>
+                      <th>${totalAmount.toLocaleString()}</th>
+                      <th>100.0%</th>
+                      <th></th>
+                    </tr>
+                  </tfoot>
                 </Table>
 
                 <div className="d-flex gap-2 mb-3">
@@ -321,8 +307,8 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                     + 종목 추가
                   </Button>
                   {portfolio.length > 1 && (
-                    <Button variant="outline-secondary" onClick={normalizeWeights}>
-                      가중치 정규화
+                    <Button variant="outline-secondary" onClick={distributeEqually}>
+                      균등 분배
                     </Button>
                   )}
                 </div>
@@ -354,19 +340,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
             </Row>
 
             <Row className="mb-4">
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>초기 자본</Form.Label>
-                  <Form.Control
-                    type="number"
-                    value={initialCapital}
-                    onChange={(e) => setInitialCapital(Number(e.target.value))}
-                    min="1000"
-                    step="1000"
-                  />
-                </Form.Group>
-              </Col>
-              <Col md={6}>
+              <Col md={12}>
                 <Form.Group className="mb-3">
                   <Form.Label>투자 전략</Form.Label>
                   <Form.Select

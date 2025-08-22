@@ -35,10 +35,10 @@ class StrategyParams(BaseModel):
                 return 0.0
         return v
 
-class PortfolioWeight(BaseModel):
-    """포트폴리오 가중치 모델"""
+class PortfolioStock(BaseModel):
+    """포트폴리오 종목 모델"""
     symbol: str = Field(..., min_length=1, max_length=10, description="주식 심볼")
-    weight: float = Field(..., gt=0, le=1.0, description="포트폴리오 내 비중 (0 < weight <= 1.0)")
+    amount: float = Field(..., gt=0, description="투자 금액 (> 0)")
     
     @validator('symbol')
     def validate_symbol(cls, v):
@@ -48,17 +48,16 @@ class PortfolioWeight(BaseModel):
 
 class PortfolioBacktestRequest(BaseModel):
     """포트폴리오 백테스트 요청 모델"""
-    portfolio: List[PortfolioWeight] = Field(..., min_items=1, max_items=10, description="포트폴리오 구성")
+    portfolio: List[PortfolioStock] = Field(..., min_items=1, max_items=10, description="포트폴리오 구성")
     start_date: str = Field(..., description="시작 날짜 (YYYY-MM-DD)")
     end_date: str = Field(..., description="종료 날짜 (YYYY-MM-DD)")
-    initial_capital: float = Field(10000, gt=0, description="초기 자본금")
     commission: float = Field(0.002, ge=0, lt=0.1, description="수수료율 (0 ~ 0.1)")
     rebalance_frequency: str = Field("monthly", description="리밸런싱 주기 (monthly, quarterly, yearly)")
     strategy: str = Field("buy_and_hold", description="전략명")
     strategy_params: Optional[Dict[str, Any]] = Field(default_factory=dict, description="전략 파라미터")
     
     @validator('portfolio')
-    def validate_portfolio_weights(cls, v):
+    def validate_portfolio(cls, v):
         if not v:
             raise ValueError('포트폴리오는 최소 1개 종목을 포함해야 합니다.')
         
@@ -67,10 +66,10 @@ class PortfolioBacktestRequest(BaseModel):
         if len(symbols) != len(set(symbols)):
             raise ValueError('포트폴리오에 중복된 종목이 있습니다.')
         
-        # 가중치 합계 확인
-        total_weight = sum(item.weight for item in v)
-        if abs(total_weight - 1.0) > 0.001:  # 부동소수점 오차 허용
-            raise ValueError(f'포트폴리오 가중치 합계는 1.0이어야 합니다. (현재: {total_weight:.3f})')
+        # 총 투자 금액 확인
+        total_amount = sum(item.amount for item in v)
+        if total_amount <= 0:
+            raise ValueError('총 투자 금액은 0보다 커야 합니다.')
         
         return v
     

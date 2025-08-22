@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Tuple
 from datetime import datetime, timedelta
 import logging
 
-from app.models.schemas import PortfolioBacktestRequest, PortfolioWeight
+from app.models.schemas import PortfolioBacktestRequest, PortfolioStock
 from app.models.requests import BacktestRequest
 from app.services.yfinance_db import load_ticker_data
 from app.services.backtest_service import backtest_service
@@ -22,7 +22,7 @@ class PortfolioBacktestService:
     @staticmethod
     def calculate_portfolio_returns(
         portfolio_data: Dict[str, pd.DataFrame],
-        weights: Dict[str, float],
+        amounts: Dict[str, float],
         rebalance_frequency: str = "monthly"
     ) -> pd.DataFrame:
         """
@@ -30,7 +30,7 @@ class PortfolioBacktestService:
         
         Args:
             portfolio_data: 각 종목의 가격 데이터 {symbol: DataFrame}
-            weights: 각 종목의 가중치 {symbol: weight}
+            amounts: 각 종목의 투자 금액 {symbol: amount}
             rebalance_frequency: 리밸런싱 주기
             
         Returns:
@@ -42,6 +42,9 @@ class PortfolioBacktestService:
             all_dates.update(df.index)
         
         date_range = pd.DatetimeIndex(sorted(all_dates))
+        
+        # 총 투자 금액 계산
+        total_amount = sum(amounts.values())
         
         # 각 종목의 수익률 계산
         returns_data = {}
@@ -55,11 +58,12 @@ class PortfolioBacktestService:
         if not returns_data:
             raise ValueError("유효한 데이터가 없습니다.")
         
-        # 포트폴리오 수익률 계산
+        # 포트폴리오 수익률 계산 (투자 금액 기준 가중 평균)
         portfolio_returns = pd.Series(0.0, index=date_range)
         
-        for symbol, weight in weights.items():
+        for symbol, amount in amounts.items():
             if symbol in returns_data:
+                weight = amount / total_amount  # 투자 금액 비율로 가중치 계산
                 portfolio_returns += returns_data[symbol] * weight
         
         # 누적 가치 계산 (1부터 시작)
@@ -77,13 +81,13 @@ class PortfolioBacktestService:
         return result
     
     @staticmethod
-    def calculate_portfolio_statistics(portfolio_data: pd.DataFrame, initial_cash: float) -> Dict[str, Any]:
+    def calculate_portfolio_statistics(portfolio_data: pd.DataFrame, total_amount: float) -> Dict[str, Any]:
         """
         포트폴리오 통계 계산
         
         Args:
             portfolio_data: 포트폴리오 가치 데이터
-            initial_cash: 초기 자본금
+            total_amount: 총 투자 금액
             
         Returns:
             포트폴리오 통계 딕셔너리
@@ -124,9 +128,9 @@ class PortfolioBacktestService:
             'Start': start_date.strftime('%Y-%m-%d'),
             'End': end_date.strftime('%Y-%m-%d'),
             'Duration': f'{duration} days',
-            'Initial_Value': initial_cash,
-            'Final_Value': final_value * initial_cash,
-            'Peak_Value': peak_value * initial_cash,
+            'Initial_Value': total_amount,
+            'Final_Value': final_value * total_amount,
+            'Peak_Value': peak_value * total_amount,
             'Total_Return': total_return,
             'Annual_Return': annual_return,
             'Annual_Volatility': annual_volatility,
@@ -186,29 +190,30 @@ class PortfolioBacktestService:
     async def run_strategy_portfolio_backtest(self, request: PortfolioBacktestRequest) -> Dict[str, Any]:
         """
         전략 기반 포트폴리오 백테스트 실행
-        각 종목에 동일한 전략을 적용하고 가중치로 결합
+        각 종목에 동일한 전략을 적용하고 투자 금액으로 결합
         """
         try:
             portfolio_results = {}
             individual_returns = {}
             total_portfolio_value = 0
+            total_amount = sum(item.amount for item in request.portfolio)
             
-            logger.info(f"전략 기반 백테스트: {request.strategy}")
+            logger.info(f"전략 기반 백테스트: {request.strategy}, 총 투자금액: ${total_amount:,.2f}")
             
             # 각 종목별로 전략 백테스트 실행
             for item in request.portfolio:
                 symbol = item.symbol
-                weight = item.weight
-                allocated_cash = request.initial_capital * weight
+                amount = item.amount
+                weight = amount / total_amount  # 가중치는 투자 금액 비율로 계산
                 
-                logger.info(f"종목 {symbol} 전략 백테스트 실행 (가중치: {weight:.3f}, 자본: ${allocated_cash:,.2f})")
+                logger.info(f"종목 {symbol} 전략 백테스트 실행 (투자금액: ${amount:,.2f}, 비중: {weight:.3f})")
                 
                 # 개별 종목 백테스트 요청 생성
                 backtest_req = BacktestRequest(
                     ticker=symbol,
                     start_date=request.start_date,
                     end_date=request.end_date,
-                    initial_cash=allocated_cash,
+                    initial_cash=amount,
                     strategy=request.strategy,
                     strategy_params=request.strategy_params or {}
                 )
@@ -219,7 +224,7 @@ class PortfolioBacktestService:
                     
                     if result and 'final_equity' in result:
                         final_value = result['final_equity']
-                        initial_value = allocated_cash
+                        initial_value = amount
                         stock_return = (final_value / initial_value - 1) * 100
                         
                         portfolio_results[symbol] = {
@@ -227,11 +232,13 @@ class PortfolioBacktestService:
                             'final_value': final_value,
                             'return_pct': stock_return,
                             'weight': weight,
+                            'amount': amount,
                             'strategy_stats': result
                         }
                         
                         individual_returns[symbol] = {
                             'weight': weight,
+                            'amount': amount,
                             'return': stock_return,
                             'initial_value': initial_value,
                             'final_value': final_value,
@@ -253,7 +260,7 @@ class PortfolioBacktestService:
                 raise ValueError("모든 종목의 백테스트가 실패했습니다.")
             
             # 포트폴리오 전체 통계 계산
-            portfolio_return = (total_portfolio_value / request.initial_capital - 1) * 100
+            portfolio_return = (total_portfolio_value / total_amount - 1) * 100
             total_trades = sum(result.get('strategy_stats', {}).get('num_trades', 0) 
                              for result in portfolio_results.values())
             
@@ -268,7 +275,7 @@ class PortfolioBacktestService:
                 'End': request.end_date,
                 'Strategy': request.strategy,
                 'Strategy_Params': request.strategy_params,
-                'Initial_Value': request.initial_capital,
+                'Initial_Value': total_amount,
                 'Final_Value': total_portfolio_value,
                 'Total_Return': portfolio_return,
                 'Total_Trades': total_trades,
@@ -283,7 +290,7 @@ class PortfolioBacktestService:
                     'portfolio_statistics': portfolio_statistics,
                     'individual_returns': individual_returns,
                     'portfolio_composition': [
-                        {'symbol': symbol, 'weight': result['weight']}
+                        {'symbol': symbol, 'weight': result['weight'], 'amount': result['amount']}
                         for symbol, result in portfolio_results.items()
                     ],
                     'strategy_details': {
@@ -307,18 +314,19 @@ class PortfolioBacktestService:
     
     async def run_buy_and_hold_portfolio_backtest(self, request: PortfolioBacktestRequest) -> Dict[str, Any]:
         """
-        기존 Buy & Hold 포트폴리오 백테스트 실행 (기존 로직 유지)
+        Buy & Hold 포트폴리오 백테스트 실행 (투자 금액 기반)
         """
         try:
             # 각 종목의 데이터 수집
             portfolio_data = {}
-            weights = {}
+            amounts = {}
+            total_amount = sum(item.amount for item in request.portfolio)
             
             for item in request.portfolio:
                 symbol = item.symbol
-                weight = item.weight
+                amount = item.amount
                 
-                logger.info(f"종목 {symbol} 데이터 로드 중 (가중치: {weight:.3f})")
+                logger.info(f"종목 {symbol} 데이터 로드 중 (투자금액: ${amount:,.2f})")
                 
                 # DB에서 데이터 로드
                 df = load_ticker_data(symbol, request.start_date, request.end_date)
@@ -328,28 +336,22 @@ class PortfolioBacktestService:
                     continue
                 
                 portfolio_data[symbol] = df
-                weights[symbol] = weight
+                amounts[symbol] = amount
                 
                 logger.info(f"종목 {symbol} 데이터 로드 완료: {len(df)} 행")
             
             if not portfolio_data:
                 raise ValueError("포트폴리오의 어떤 종목도 데이터를 가져올 수 없습니다.")
             
-            # 실제 사용된 종목들의 가중치 정규화
-            total_weight = sum(weights.values())
-            if total_weight != 1.0:
-                logger.info(f"가중치 정규화: {total_weight:.3f} -> 1.0")
-                weights = {k: v / total_weight for k, v in weights.items()}
-            
             # 포트폴리오 수익률 계산
             logger.info("포트폴리오 수익률 계산 중...")
             portfolio_result = self.calculate_portfolio_returns(
-                portfolio_data, weights, request.rebalance_frequency
+                portfolio_data, amounts, request.rebalance_frequency
             )
             
             # 통계 계산
             logger.info("포트폴리오 통계 계산 중...")
-            statistics = self.calculate_portfolio_statistics(portfolio_result, request.initial_capital)
+            statistics = self.calculate_portfolio_statistics(portfolio_result, total_amount)
             
             # 개별 종목 수익률 (참고용)
             individual_returns = {}
@@ -358,8 +360,10 @@ class PortfolioBacktestService:
                     start_price = df['Close'].iloc[0]
                     end_price = df['Close'].iloc[-1]
                     individual_return = (end_price / start_price - 1) * 100
+                    weight = amounts[symbol] / total_amount
                     individual_returns[symbol] = {
-                        'weight': weights[symbol],
+                        'weight': weight,
+                        'amount': amounts[symbol],
                         'return': individual_return,
                         'start_price': start_price,
                         'end_price': end_price
@@ -372,11 +376,11 @@ class PortfolioBacktestService:
                     'portfolio_statistics': statistics,
                     'individual_returns': individual_returns,
                     'portfolio_composition': [
-                        {'symbol': symbol, 'weight': weight}
-                        for symbol, weight in weights.items()
+                        {'symbol': symbol, 'weight': amount / total_amount, 'amount': amount}
+                        for symbol, amount in amounts.items()
                     ],
                     'equity_curve': {
-                        date.strftime('%Y-%m-%d'): value * request.initial_capital
+                        date.strftime('%Y-%m-%d'): value * total_amount
                         for date, value in portfolio_result['Portfolio_Value'].items()
                     },
                     'daily_returns': {
