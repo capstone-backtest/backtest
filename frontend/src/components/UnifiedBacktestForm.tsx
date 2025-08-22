@@ -182,7 +182,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
 
   const renderStrategyParams = () => {
     const config = strategyConfigs[selectedStrategy as keyof typeof strategyConfigs];
-    if (!config || !config.parameters) return null;
+    if (!config || !config.parameters || Object.keys(config.parameters).length === 0) return null;
 
     return (
       <Row className="mb-4">
@@ -272,7 +272,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                             type="number"
                             value={stock.amount}
                             onChange={(e) => updateStock(index, 'amount', e.target.value)}
-                            step="100"
+                            step="1"
                             min="1"
                           />
                         </td>

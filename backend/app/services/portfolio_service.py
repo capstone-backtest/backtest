@@ -222,8 +222,8 @@ class PortfolioBacktestService:
                     # 개별 종목 백테스트 실행
                     result = await backtest_service.run_backtest(backtest_req)
                     
-                    if result and 'final_equity' in result:
-                        final_value = result['final_equity']
+                    if result and hasattr(result, 'final_equity'):
+                        final_value = result.final_equity
                         initial_value = amount
                         stock_return = (final_value / initial_value - 1) * 100
                         
@@ -233,7 +233,7 @@ class PortfolioBacktestService:
                             'return_pct': stock_return,
                             'weight': weight,
                             'amount': amount,
-                            'strategy_stats': result
+                            'strategy_stats': result.__dict__  # 객체를 딕셔너리로 변환
                         }
                         
                         individual_returns[symbol] = {
@@ -242,15 +242,15 @@ class PortfolioBacktestService:
                             'return': stock_return,
                             'initial_value': initial_value,
                             'final_value': final_value,
-                            'trades': result.get('num_trades', 0),
-                            'win_rate': result.get('win_rate_pct', 0)
+                            'trades': getattr(result, 'total_trades', 0),
+                            'win_rate': getattr(result, 'win_rate_pct', 0)
                         }
                         
                         total_portfolio_value += final_value
                         
-                        logger.info(f"종목 {symbol} 완료: {stock_return:.2f}% 수익률")
+                        logger.info(f"종목 {symbol} 완료: {stock_return:.2f}% 수익률, 거래수: {getattr(result, 'total_trades', 0)}")
                     else:
-                        logger.warning(f"종목 {symbol} 백테스트 실패")
+                        logger.warning(f"종목 {symbol} 백테스트 실패: 결과가 없거나 final_equity 속성이 없음")
                         
                 except Exception as e:
                     logger.error(f"종목 {symbol} 백테스트 오류: {str(e)}")
@@ -261,7 +261,7 @@ class PortfolioBacktestService:
             
             # 포트폴리오 전체 통계 계산
             portfolio_return = (total_portfolio_value / total_amount - 1) * 100
-            total_trades = sum(result.get('strategy_stats', {}).get('num_trades', 0) 
+            total_trades = sum(result.get('strategy_stats', {}).get('total_trades', 0) 
                              for result in portfolio_results.values())
             
             # 가중 평균 승률 계산

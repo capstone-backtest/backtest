@@ -27,34 +27,48 @@ class SMAStrategy(Strategy):
 
 
 class RSIStrategy(Strategy):
-    """RSI 전략"""
+    """RSI 전략 - 개선된 버전"""
     rsi_period = 14
-    rsi_upper = 70
-    rsi_lower = 30
+    rsi_overbought = 70
+    rsi_oversold = 30
+    position_size = 0.95  # 95% 포지션 사용
     
     def init(self):
         close = self.data.Close
         self.rsi = self.I(self._rsi, close, self.rsi_period)
     
     def _rsi(self, close: pd.Series, period: int) -> pd.Series:
-        """RSI 계산"""
+        """RSI 계산 - 안정성 개선"""
         close = pd.Series(close)
         delta = close.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
         
-        # 0으로 나누는 것을 방지
-        rs = gain / loss.replace(0, np.nan)
+        # 상승분과 하락분 분리
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        
+        # 지수 이동평균으로 평균 계산 (더 안정적)
+        avg_gain = gain.ewm(alpha=1/period, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/period, adjust=False).mean()
+        
+        # 0으로 나누는 것 방지
+        avg_loss = avg_loss.replace(0, np.finfo(float).eps)
+        
+        rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
+        
         return rsi.fillna(50)  # NaN 값을 50으로 채움
     
     def next(self):
-        if len(self.rsi) > 0:
+        if len(self.rsi) > self.rsi_period:  # 충분한 데이터가 있을 때만 실행
             current_rsi = self.rsi[-1]
-            if current_rsi < self.rsi_lower and not self.position:
-                self.buy()
-            elif current_rsi > self.rsi_upper and self.position:
-                self.sell()
+            
+            # 과매도 구간에서 매수
+            if current_rsi < self.rsi_oversold and not self.position:
+                self.buy(size=self.position_size)
+            
+            # 과매수 구간에서 매도
+            elif current_rsi > self.rsi_overbought and self.position:
+                self.sell(size=self.position.size)
 
 
 class BollingerBandsStrategy(Strategy):
@@ -174,22 +188,22 @@ class StrategyService:
                         'type': 'int',
                         'default': 14,
                         'min': 5,
-                        'max': 50,
+                        'max': 30,
                         'description': 'RSI 계산 기간'
                     },
-                    'rsi_upper': {
-                        'type': 'float',
+                    'rsi_overbought': {
+                        'type': 'int',
                         'default': 70,
-                        'min': 50,
+                        'min': 60,
                         'max': 90,
-                        'description': '과매수 임계값'
+                        'description': 'RSI 과매수 기준'
                     },
-                    'rsi_lower': {
-                        'type': 'float',
+                    'rsi_oversold': {
+                        'type': 'int',
                         'default': 30,
                         'min': 10,
-                        'max': 50,
-                        'description': '과매도 임계값'
+                        'max': 40,
+                        'description': 'RSI 과매도 기준'
                     }
                 }
             },
