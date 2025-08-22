@@ -48,10 +48,36 @@ interface PortfolioResultsProps {
 }
 
 const PortfolioResults: React.FC<PortfolioResultsProps> = ({ result }) => {
+  // null 체크
+  if (!result) {
+    return (
+      <Container>
+        <div className="text-center my-5">
+          <div style={{ fontSize: '3rem' }}>⚠️</div>
+          <h4 className="mt-3">결과 데이터가 없습니다</h4>
+          <p className="text-muted">포트폴리오 백테스트를 다시 실행해주세요.</p>
+        </div>
+      </Container>
+    );
+  }
+
   const { portfolio_statistics, individual_returns, portfolio_composition, equity_curve, daily_returns } = result;
 
-  // 차트 데이터 변환
-  const equityChartData = Object.entries(equity_curve).map(([date, value]) => ({
+  // 각 속성에 대한 추가 null 체크
+  if (!portfolio_statistics || !individual_returns || !portfolio_composition || !equity_curve || !daily_returns) {
+    return (
+      <Container>
+        <div className="text-center my-5">
+          <div style={{ fontSize: '3rem' }}>⚠️</div>
+          <h4 className="mt-3">결과 데이터가 불완전합니다</h4>
+          <p className="text-muted">포트폴리오 백테스트를 다시 실행해주세요.</p>
+        </div>
+      </Container>
+    );
+  }
+
+  // 차트 데이터 변환 (안전한 방식으로)
+  const equityChartData = Object.entries(equity_curve || {}).map(([date, value]) => ({
     date,
     value: value,
     return: daily_returns[date] || 0

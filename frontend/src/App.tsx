@@ -92,7 +92,12 @@ function App() {
       }
 
       const result = await response.json();
-      setPortfolioResults(result);
+      // API 응답이 { status: 'success', data: {...} } 형태인 경우 data 추출
+      if (result.status === 'success' && result.data) {
+        setPortfolioResults(result.data);
+      } else {
+        setPortfolioResults(result);
+      }
     } catch (err) {
       setPortfolioError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
