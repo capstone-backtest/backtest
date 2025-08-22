@@ -83,7 +83,7 @@ backtest/
 
 서비스가 실행되면, 웹 브라우저에서 다음 주소로 접속하세요:
 
-- 개발(override 적용): 프론트엔드(Vite) http://localhost:5173
+- 개발 (dev 파일 사용): 프론트엔드(Vite) http://localhost:5173
 - 프로덕션/미리보기: 프론트엔드 (정적 서빙) http://localhost:8080
 - 백엔드(FastAPI): http://localhost:8000
 
@@ -98,7 +98,6 @@ backtest/
 
 - 현재 구현은 CSV 기반 로컬 캐시 대신 MySQL(DB)을 1차 저장소/캐시로 사용하는 DB-first 흐름을 따릅니다.
 - yfinance 관련 API 및 DB 캐시 동작(예: `/api/v1/yfinance/fetch-and-cache`, v2의 DB 보충 동작)은 `doc/backend/api.md`에 자세히 정리되어 있으니 해당 문서를 참조하세요.
-- yfinance 관련 API 및 DB 캐시 동작은 `doc/backend/api.md`를 참조하세요.
 
 ## 7. 라이선스
 

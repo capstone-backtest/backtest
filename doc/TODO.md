@@ -16,5 +16,5 @@
 
 ## 검증 체크리스트
 
-- 모든 변경 후 `python -c "import sys; sys.path.insert(0, 'backend'); import app; print('IMPORT_OK')"`로 모듈 임포트 확인 (세션에서 실행되어 `IMPORT_OK` 확인됨)
+- 모든 변경 후 `python -c "import sys; sys.path.insert(0, 'path/to/repo/backend'); import app; print('IMPORT_OK')"`로 모듈 임포트 확인
 - `docker compose up --build`로 전체 스택을 띄운 뒤 프론트엔드/백엔드 E2E 시나리오(예: 브라우저에서 백테스트 실행)를 재현

@@ -68,9 +68,9 @@ yfinance 및 캐시
 테스트 및 검증
 - 간단한 import 체크(백엔드 모듈이 문제없이 로드되는지 확인):
 ```powershell
-python -c "import sys; sys.path.insert(0, 'C:/Users/USER/source/backtest/backend'); import app; print('IMPORT_OK')"
+python -c "import sys; sys.path.insert(0, 'C:/path/to/repo/backend'); import app; print('IMPORT_OK')"
 ```
-위 커맨드는 이 저장소의 백엔드 코드가 import 가능한지 빠르게 검사합니다. (세션에서 실행되어 `IMPORT_OK`를 확인했습니다.)
+위 커맨드는 이 저장소의 백엔드 코드가 import 가능한지 빠르게 검사하는 예시입니다.
 
 - 프로젝트 루트에 포함된 단위/통합 테스트 스크립트(`backend/test_api.py`, `backend/test_chart_api.py`)를 사용해 추가 검증을 수행하세요.
 
