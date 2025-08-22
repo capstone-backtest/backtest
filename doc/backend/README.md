@@ -39,11 +39,11 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 도커(권장: 전체 스택)
-- 루트 README에 있는 Docker Compose 설정을 사용하세요. 개발용 override가 포함되어 있어 프론트엔드와 백엔드를 동시에 띄우기 편합니다.
+- 루트 README에 있는 Docker Compose 설정을 사용하세요. 개발 전용 Compose 파일은 `docker-compose.dev.yml`에 보관되어 있으며 자동 오버라이드는 기대하지 않습니다. 개발 환경에서는 아래처럼 명시적으로 파일을 지정하여 실행하세요.
 
 ```powershell
-# Compose v2 (권장)
-docker compose up --build
+# 개발 (Compose v2 권장)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 # 프로덕션/미리보기
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build

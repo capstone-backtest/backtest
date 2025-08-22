@@ -55,16 +55,16 @@ backtest/
     cp frontend/.env.example frontend/.env
     ```
 
-2.  **개발 환경 (권장 — 자동 오버라이드)**:
+2.  **개발 환경 (권장)**:
 
-    로컬 개발은 기본 `docker-compose.yml`과 `docker-compose.override.yml`이 자동으로 병합되어 실행됩니다. `override`는 소스 바인드, Vite 개발 서버(5173), uvicorn `--reload` 등 개발용 설정을 포함합니다.
+    개발 전용 Compose 파일은 `docker-compose.dev.yml`에 보관되어 있으며 자동 병합을 기대하지 않습니다. 개발 환경을 실행하려면 아래처럼 명시적으로 파일을 지정하세요.
 
     ```bash
     # Docker Compose v1
-    docker-compose up --build
+    docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
     # 또는 Docker Compose v2 (권장)
-    docker compose up --build
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
     ```
 
     백그라운드 실행을 원하면 `-d`를 추가하세요. 개발 구성에서는 프론트엔드가 Vite 개발 서버로 동작하므로 브라우저에서 `http://localhost:5173`로 접속합니다.
