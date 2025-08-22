@@ -40,7 +40,7 @@ const fetchChartData = async (params: {
   strategy: string;
   strategy_params?: any;
 }): Promise<ChartDataResponse> => {
-  const response = await fetch('/api/v1/backtest/chart-data', {
+  const response = await fetch('/api/v2/backtest/chart-data', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
