@@ -122,3 +122,53 @@ def save_ticker_data(ticker: str, df: pd.DataFrame) -> int:
         raise
     finally:
         conn.close()
+
+
+def load_ticker_data(ticker: str, start_date=None, end_date=None) -> pd.DataFrame:
+    """DB에서 ticker의 daily_prices를 조회해 pandas DataFrame으로 반환합니다.
+
+    start_date/end_date는 date 또는 문자열(YYYY-MM-DD)을 받을 수 있습니다.
+    반환 DataFrame은 DatetimeIndex(날짜)와 컬럼 ['Open','High','Low','Close','Adj_Close','Volume']를 가집니다.
+    """
+    engine = _get_engine()
+    conn = engine.connect()
+    try:
+        # find stock_id
+        row = conn.execute(text("SELECT id FROM stocks WHERE ticker = :t"), {"t": ticker}).fetchone()
+        if not row:
+            raise ValueError(f"티커 '{ticker}'이(가) DB에 없습니다.")
+        stock_id = row[0]
+
+        # build query
+        q = "SELECT date, open, high, low, close, adj_close, volume FROM daily_prices WHERE stock_id = :sid"
+        params = {"sid": stock_id}
+        if start_date:
+            q += " AND date >= :start"
+            params["start"] = str(start_date)
+        if end_date:
+            q += " AND date <= :end"
+            params["end"] = str(end_date)
+        q += " ORDER BY date ASC"
+
+        res = conn.execute(text(q), params)
+        rows = res.fetchall()
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "adj_close", "volume"])
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.set_index('date')
+        # normalize column names to expected ones
+        df = df.rename(columns={
+            'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'adj_close': 'Adj Close', 'volume': 'Volume'
+        })
+        # ensure types
+        for col in ['Open','High','Low','Close','Adj Close']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        if 'Volume' in df.columns:
+            df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce').fillna(0).astype('int64')
+
+        return df
+    finally:
+        conn.close()
