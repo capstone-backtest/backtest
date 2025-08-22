@@ -54,7 +54,8 @@ class Settings(BaseSettings):
     default_commission: float = 0.002  # 0.2%
     
     # 데이터 설정
-    data_cache_dir: str = "data_cache"
+    # 빈 문자열이면 파일 캐시를 완전히 비활성화합니다.
+    data_cache_dir: str = ""
     max_cache_age_hours: int = 24
     
     # 최적화 설정

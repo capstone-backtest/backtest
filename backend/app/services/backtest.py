@@ -2,163 +2,26 @@ import yfinance as yf
 import pandas as pd
 import warnings
 from contextlib import contextmanager
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Generator
 from backtesting import Backtest
 from requests.exceptions import RequestException
 import time
 from datetime import datetime, timedelta
 import random
-import os
-import json
-import hashlib
-from pathlib import Path
 import numpy as np
 import asyncio
 
 from app.core.exceptions import BacktestError
+from app.core.config import settings
 from app.utils.serializers import recursive_serialize
 from strategies.sma_cross import SmaCross
 from app.models.schemas import BacktestRequest
 
-class DataCache:
-    """주식 데이터 캐싱 시스템"""
-    
-    CACHE_DIR = Path("data_cache")
-    CACHE_EXPIRY_DAYS = 1  # 캐시 유효 기간 (일)
-    
-    @classmethod
-    def _get_cache_key(cls, symbol: str, start_date: str, end_date: str) -> str:
-        """캐시 키 생성"""
-        key_str = f"{symbol}_{start_date}_{end_date}"
-        return hashlib.md5(key_str.encode()).hexdigest()
-    
-    @classmethod
-    def _get_cache_path(cls, cache_key: str) -> Path:
-        """캐시 파일 경로 반환"""
-        return cls.CACHE_DIR / f"{cache_key}.parquet"
-    
-    @classmethod
-    def _get_metadata_path(cls, cache_key: str) -> Path:
-        """메타데이터 파일 경로 반환"""
-        return cls.CACHE_DIR / f"{cache_key}_meta.json"
-    
-    @classmethod
-    def _ensure_cache_dir(cls):
-        """캐시 디렉토리 생성"""
-        cls.CACHE_DIR.mkdir(exist_ok=True)
-    
-    @classmethod
-    def _is_cache_valid(cls, metadata_path: Path) -> bool:
-        """캐시 유효성 검사"""
-        if not metadata_path.exists():
-            return False
-        
-        try:
-            with open(metadata_path, 'r') as f:
-                metadata = json.load(f)
-            cache_time = datetime.fromisoformat(metadata['timestamp'])
-            return (datetime.now() - cache_time).days < cls.CACHE_EXPIRY_DAYS
-        except:
-            return False
-    
-    @classmethod
-    def get_data(cls, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
-        """캐시에서 데이터 조회"""
-        cls._ensure_cache_dir()
-        cache_key = cls._get_cache_key(symbol, start_date, end_date)
-        cache_path = cls._get_cache_path(cache_key)
-        metadata_path = cls._get_metadata_path(cache_key)
-        
-        if cache_path.exists() and cls._is_cache_valid(metadata_path):
-            try:
-                data = pd.read_parquet(cache_path)
-                # datetime 인덱스로 변환
-                if not isinstance(data.index, pd.DatetimeIndex):
-                    data.index = pd.to_datetime(data.index)
-                return data
-            except:
-                return None
-        return None
-    
-    @classmethod
-    def save_data(cls, symbol: str, start_date: str, end_date: str, data: pd.DataFrame):
-        """데이터를 캐시에 저장"""
-        cls._ensure_cache_dir()
-        cache_key = cls._get_cache_key(symbol, start_date, end_date)
-        cache_path = cls._get_cache_path(cache_key)
-        metadata_path = cls._get_metadata_path(cache_key)
-        
-        # 데이터 저장
-        data.to_parquet(cache_path)
-        
-        # 메타데이터 저장
-        metadata = {
-            'symbol': symbol,
-            'start_date': start_date,
-            'end_date': end_date,
-            'timestamp': datetime.now().isoformat(),
-            'rows': len(data)
-        }
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f)
-
 class BacktestService:
-    """백테스트 서비스 클래스"""
-    
-    REQUIRED_COLUMNS = ['Open', 'High', 'Low', 'Close', 'Volume']
-    MIN_DATA_POINTS = 50
-    MAX_RETRIES = 5
-    BASE_DELAY = 5
-    MAX_DELAY = 30
-    
-    @staticmethod
-    def validate_data(data: pd.DataFrame, symbol: str) -> None:
-        """데이터 유효성 검증"""
-        if data.empty:
-            raise BacktestError(f"'{symbol}' 종목에 대한 데이터가 존재하지 않습니다.", "NO_DATA")
-
-        if len(data) < BacktestService.MIN_DATA_POINTS:
-            raise BacktestError(
-                f"백테스트를 위한 충분한 데이터가 없습니다. (최소 {BacktestService.MIN_DATA_POINTS}일 필요)",
-                "INSUFFICIENT_DATA"
-            )
-
-        missing_columns = [col for col in BacktestService.REQUIRED_COLUMNS if col not in data.columns]
-        if missing_columns:
-            raise BacktestError(
-                f"필수 데이터 컬럼이 누락되었습니다: {', '.join(missing_columns)}",
-                "MISSING_COLUMNS"
-            )
-
-        if data.isnull().any().any():
-            raise BacktestError("데이터에 결측치가 포함되어 있습니다.", "MISSING_VALUES")
-        
-        # datetime 인덱스 확인
-        if not isinstance(data.index, pd.DatetimeIndex):
-            try:
-                data.index = pd.to_datetime(data.index)
-            except:
-                raise BacktestError("데이터의 인덱스를 datetime으로 변환할 수 없습니다.", "INVALID_INDEX")
-
-    @staticmethod
-    def prepare_data(data: pd.DataFrame) -> pd.DataFrame:
-        """데이터 전처리"""
-        # 컬럼명 정규화
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.get_level_values(0)
-        
-        # 필요한 컬럼만 선택
-        data = data[BacktestService.REQUIRED_COLUMNS].copy()
-        
-        # 인덱스가 datetime이 아닌 경우 변환
-        if not isinstance(data.index, pd.DatetimeIndex):
-            data.index = pd.to_datetime(data.index)
-        
-        return data
 
     @staticmethod
     @contextmanager
-    def capture_warnings() -> List[str]:
+    def capture_warnings() -> Generator[List[str], None, None]:
         """경고 메시지를 캡처하는 컨텍스트 매니저"""
         warning_messages = []
         original_handler = warnings.showwarning
@@ -183,10 +46,8 @@ class BacktestService:
     def download_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
         """주식 데이터 다운로드 (캐시 시스템 적용)"""
         # 캐시에서 데이터 조회 시도
-        cached_data = DataCache.get_data(symbol, start_date, end_date)
-        if cached_data is not None:
-            print(f"Using cached data for {symbol}")
-            return cached_data
+        # 캐시에서 데이터 조회 시도
+        print(f"Downloading data for {symbol} from yfinance")
         
         # 캐시에 없는 경우 yfinance에서 다운로드
         start = datetime.strptime(start_date, '%Y-%m-%d')
@@ -235,7 +96,7 @@ class BacktestService:
                 if not data.empty:
                     if len(data) >= BacktestService.MIN_DATA_POINTS:
                         # 데이터를 캐시에 저장
-                        DataCache.save_data(symbol, start_date, end_date, data)
+                        print(f"Data for {symbol} downloaded successfully.")
                         return data
                     elif attempt < BacktestService.MAX_RETRIES - 1:
                         print(f"Data points insufficient ({len(data)}), retrying...")

@@ -87,8 +87,15 @@ async def startup_event():
     
     # 캐시 디렉토리 생성
     from .utils.data_fetcher import data_fetcher
-    data_fetcher.cache_dir.mkdir(exist_ok=True)
-    logger.info(f"데이터 캐시 디렉토리: {data_fetcher.cache_dir}")
+    cache_dir = getattr(data_fetcher, 'cache_dir', None)
+    if cache_dir:
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"데이터 캐시 디렉토리: {cache_dir}")
+        except Exception as e:
+            logger.warning(f"캐시 디렉토리 생성 실패: {e}")
+    else:
+        logger.info("파일 기반 데이터 캐시 비활성화: 캐시 디렉토리 생성 건너뜀")
 
 
 @app.on_event("shutdown")

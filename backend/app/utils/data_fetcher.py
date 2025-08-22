@@ -16,14 +16,14 @@ logger = logging.getLogger(__name__)
 class DataFetcher:
     """주식 데이터 수집 클래스"""
 
-    def __init__(self, cache_dir: str = "data_cache"):
+    def __init__(self, cache_dir: str = ""):
         """
         Args:
             cache_dir: 데이터 캐시 디렉토리
         """
         # CSV 캐시 비활성화: 디렉토리 유지하되 사용하지 않습니다.
         # (디렉토리는 만들지 않음 — 파일 I/O를 완전히 비활성화합니다)
-        self.cache_dir = Path(cache_dir)
+        self.cache_dir = Path(cache_dir) if cache_dir else None
     
     def get_stock_data(
         self,
