@@ -1,24 +1,6 @@
 # To-Do
 
-이 파일은 코드베이스 상태를 바탕으로 우선순위가 높은 개선 사항과 문서-코드 불일치 항목을 정리합니다.
-
-## 문서와 코드의 불일치
-
-- [x] CSV 캐시: 루트 문서와 `.github/copilot-instructions.md`에는 CSV 기반 로컬 캐시 동작이 설명되어 있었으나, 현재 `backend/app/utils/data_fetcher.py`에서는 CSV 입출력이 비활성화되어 있습니다. 관련 문서를 최신화했습니다.
-- [x] Alembic: 루트 README에 Alembic이 언급되어 있으나 마이그레이션 스크립트(또는 alembic 디렉터리)가 리포지토리에 포함되어 있지 않습니다. README에서 Alembic 언급을 제거하거나 Alembic 설정을 추가해야 합니다. 이번에 README에서 언급을 제거했습니다.
-
-## 문서 통합 진행 상황
-
-- [x] 중앙 `doc/` 폴더 생성 및 인덱스(`doc/README.md`) 추가
-- [x] `backend/doc`와 `frontend/doc`에서 주요 문서를 `doc/backend/`, `doc/frontend/`로 이동(사용자 수행)
-- [x] 각 서브문서 상단에 중앙 인덱스 링크 안내 추가
-
-## 다음 정리 작업 (제가 도와드릴 수 있음)
-
-- [x] 중복 내용 병합: yfinance/엔드포인트 설명은 `doc/backend/api.md`를 단일 진입점으로 정리했습니다.
-- [x] 프론트엔드 컴포넌트 문서(`doc/frontend/COMPONENTS.md`)를 `frontend/src/components` 구조에 맞게 업데이트했습니다.
-- [ ] 문서 스타일 통일: 마크다운 헤더 레벨·용어(예: API vs 엔드포인트) 표준화
-- [ ] (선택) MkDocs 설정을 추가해 정적 문서 사이트로 빌드 가능하게 구성
+- [x] 문서 스타일 통일: 마크다운 헤더 레벨·용어(예: API vs 엔드포인트) 표준화 (초기 교체 완료)
 
 ## 우선 순위 작업 (권장)
 

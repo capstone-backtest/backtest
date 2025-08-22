@@ -1,15 +1,10 @@
 ````markdown
-# 문서 위치 안내
-
-- 중앙 문서 인덱스: `../README.md`
-- 백엔드 상세 문서: 이 파일(`api.md`)
-
-# 문서 위치 안내
-
-- 중앙 문서 인덱스: `../README.md`
-- 백엔드 상세 문서: 이 파일(`api.md`)
-
 # API 명세서
+
+## 문서 위치 안내
+
+- 중앙 문서 인덱스: `../README.md`
+- 백엔드 상세 문서: 이 파일(`api.md`)
 
 ## 1. 기본 정보
 
@@ -91,9 +86,10 @@
 
 ## 5. YFinance 데이터 조회 및 캐시
 
+
 ### POST /api/v1/yfinance/fetch-and-cache
 
-설명: yfinance에서 지정한 `ticker`와 `start`/`end` 기간을 받아 원본 시계열(OHLCV)을 데이터베이스에 저장(업서트)합니다. 이 엔드포인트은 DB 캐시를 직접 채우기 위한 용도입니다.
+설명: yfinance에서 지정한 `ticker`와 `start`/`end` 기간을 받아 원본 시계열(OHLCV)을 데이터베이스에 저장(업서트)합니다. 이 API는 DB 캐시를 직접 채우기 위한 용도입니다.
 
 - **Tags**: `yfinance 캐시`
 - **요청 방식**: POST (쿼리/JSON 파라미터 가능)

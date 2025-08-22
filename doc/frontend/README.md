@@ -3,7 +3,7 @@
 - 중앙 문서 인덱스: `../README.md`
 - 프론트엔드 상세 문서: 이 파일(`README.md`) 및 `doc/frontend/` 하위 문서
 
-# Frontend Dashboard
+## Frontend Dashboard
 
 ## 1. 개요
 
@@ -125,7 +125,7 @@ frontend/
 
 ### API 연동
 - **[API_GUIDE.md](API_GUIDE.md)** - 백엔드 API 연동 가이드
-  - API 엔드포인트 및 데이터 타입
+  - API 및 데이터 타입
   - 요청/응답 형식
   - 에러 처리 방법
   - 테스트 및 디버깅
@@ -277,7 +277,7 @@ App.tsx (843줄)
 
 ### 백엔드 의존성
 - **API 서버**: http://localhost:8000
-- **엔드포인트**: `/api/v1/backtest/chart-data`
+- **API**: `/api/v1/backtest/chart-data`
 - **프로토콜**: HTTP/HTTPS
 - **응답 형식**: JSON
 
