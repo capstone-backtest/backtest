@@ -186,6 +186,43 @@
 
 ## 5. 최적화 (Optimization)
 
+  ## 5. YFinance 데이터 조회 및 캐시
+
+  ### POST /api/v1/yfinance/fetch-and-cache
+
+  yfinance에서 지정한 `ticker`와 `start`/`end` 기간을 기반으로 원본 데이터를 받아 데이터베이스에 저장(캐시)합니다. 이 엔드포인트는 전처리/후처리 없이 yfinance가 반환하는 시계열(OHLCV)을 그대로 DB에 적재합니다.
+
+  - **Tags**: `yfinance 캐시`
+  - **요청 방식**: POST (쿼리 파라미터 사용)
+  - **쿼리 파라미터**:
+    - `ticker` (string, required): 종목 심볼, 예: `AAPL`
+    - `start` (date, required): 시작일(YYYY-MM-DD)
+    - `end` (date, required): 종료일(YYYY-MM-DD)
+    - `interval` (string, optional, default `1d`): 간격(예: `1d`, `1wk`, `1mo`)
+
+  - **설명**: 서버는 yfinance로부터 데이터를 받아 `stocks` 및 `daily_prices` 테이블에 upsert 합니다. 이미 존재하는 데이터는 갱신됩니다.
+
+  - **응답 (200 OK)**:
+    ```json
+    {
+      "ticker": "AAPL",
+      "rows_saved": 252,
+      "start": "2023-01-01",
+      "end": "2023-12-31"
+    }
+    ```
+
+  - **오류 예시**:
+    - 400: 잘못된 파라미터(예: start가 end보다 이후인 경우)
+    - 500: yfinance 호출 실패 또는 DB 저장 실패
+
+  - **비고 / 운영 주의사항**:
+    - 응답 크기가 클 수 있으므로 장기간/고빈도 분봉 요청은 주의하세요.
+    - DB 연결 문자열은 환경변수 `DATABASE_URL`로 설정합니다(예: `mysql+pymysql://user:pass@host:3306/stock_data_cache`).
+    - 동시 다중 요청에 대한 중복 fetch 방지는 현재 구현에 포함되어 있지 않으므로, 스케일링 시 락 전략(예: Redis 분산 락)을 권장합니다.
+
+  ## 6. 최적화 (Optimization)
+
 ### POST /api/v1/optimize/run
 
 전략의 파라미터를 최적화하여 최고의 성과를 내는 조합을 찾습니다.

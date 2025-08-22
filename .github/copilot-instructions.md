@@ -12,6 +12,7 @@
 - 백테스트 실행 로직: `backend/app/services/backtest_service.py`
 - 데이터 페처(캐시 포함): `backend/app/utils/data_fetcher.py` (기본 캐시 디렉토리: `data_cache/`)
 - 프로젝트 루트: Docker Compose 파일들 (`docker-compose.yml`, `docker-compose.override.yml`, `docker-compose.prod.yml`)
+ - 데이터 페처(캐시 포함): `backend/app/utils/data_fetcher.py` (기본 캐시 디렉토리: `data_cache/`) — 추가로 MySQL에 원본 응답을 저장하는 `yfinance` 캐시 엔드포인트(`/api/v1/yfinance/fetch-and-cache`)가 있습니다. 이 엔드포인트는 티커·기간을 받아 yfinance에서 시계열(OHLCV)을 불러와 `stocks`와 `daily_prices`에 upsert합니다.
 
 ## 아키텍처·데이터 흐름 (요지)
 - 클라이언트 -> FastAPI 엔드포인트(`/api/v1/backtest/*`) 호출
