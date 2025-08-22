@@ -97,8 +97,8 @@ backtest/
 ## 참고 (데이터 캐시 관련)
 
 - 현재 구현은 CSV 기반 로컬 캐시 대신 MySQL(DB)을 1차 저장소/캐시로 사용하는 DB-first 흐름을 따릅니다.
-- yfinance 관련 엔드포인트 및 DB 캐시 동작(예: `/api/v1/yfinance/fetch-and-cache`, v2의 DB 보충 동작)은 `doc/backend/api.md`에 자세히 정리되어 있으니 해당 문서를 참조하세요.
- - yfinance 관련 엔드포인트 및 DB 캐시 동작은 `doc/backend/api.md`를 참조하세요.
+- yfinance 관련 API 및 DB 캐시 동작(예: `/api/v1/yfinance/fetch-and-cache`, v2의 DB 보충 동작)은 `doc/backend/api.md`에 자세히 정리되어 있으니 해당 문서를 참조하세요.
+- yfinance 관련 API 및 DB 캐시 동작은 `doc/backend/api.md`를 참조하세요.
 
 ## 7. 라이선스
 

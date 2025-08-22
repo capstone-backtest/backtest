@@ -1,5 +1,5 @@
 """
-전략 관리 API 엔드포인트
+전략 관리 API
 """
 from fastapi import APIRouter, HTTPException, status
 from typing import List, Dict, Any

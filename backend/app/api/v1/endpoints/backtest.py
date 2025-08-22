@@ -1,5 +1,5 @@
 """
-백테스팅 API 엔드포인트
+백테스팅 API
 """
 from fastapi import APIRouter, HTTPException, status
 from ....models.requests import BacktestRequest

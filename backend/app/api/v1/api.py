@@ -7,7 +7,7 @@ from .endpoints import yfinance_cache
 
 api_router = APIRouter()
 
-# 각 엔드포인트 라우터를 메인 API 라우터에 포함
+# 각 API 라우터를 메인 API 라우터에 포함
 api_router.include_router(
     backtest.router,
     prefix="/backtest",

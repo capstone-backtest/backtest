@@ -1,5 +1,5 @@
 """
-백테스팅 최적화 API 엔드포인트
+백테스팅 최적화 API
 """
 from fastapi import APIRouter, HTTPException, status
 from typing import List, Dict, Any

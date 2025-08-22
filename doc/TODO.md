@@ -1,9 +1,5 @@
 # To-Do
 
-- [x] 문서 스타일 통일: 마크다운 헤더 레벨·용어(예: API vs 엔드포인트) 표준화 (초기 교체 완료)
-
-## 우선 순위 작업 (권장)
-
 1. 핵심(High)
    - [ ] 프론트엔드 타입/린트 정리: `frontend/src/App.tsx` 리팩터로 인한 TypeScript 오류를 해결해 Vite dev 서버가 에러 없이 실행되도록 합니다.
    - [ ] DB-only 흐름 검증: 새로운 티커/기간 요청 시 CSV가 생성되지 않고 MySQL에 정상 업서트되는지(동시성 포함) E2E로 검증합니다.
@@ -20,9 +16,5 @@
 
 ## 검증 체크리스트
 
-- [x] 모든 변경 후 `python -c "import sys; sys.path.insert(0, 'backend'); import app; print('IMPORT_OK')"`로 모듈 임포트 확인 (세션에서 실행되어 `IMPORT_OK` 확인됨)
-- [ ] `docker compose up --build`로 전체 스택을 띄운 뒤 프론트엔드/백엔드 E2E 시나리오(예: 브라우저에서 백테스트 실행)를 재현
-
----
-
-원하시면 우선 순위 항목 중 하나를 제가 바로 구현하고 테스트해 드리겠습니다.
+- 모든 변경 후 `python -c "import sys; sys.path.insert(0, 'backend'); import app; print('IMPORT_OK')"`로 모듈 임포트 확인 (세션에서 실행되어 `IMPORT_OK` 확인됨)
+- `docker compose up --build`로 전체 스택을 띄운 뒤 프론트엔드/백엔드 E2E 시나리오(예: 브라우저에서 백테스트 실행)를 재현
