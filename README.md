@@ -16,7 +16,7 @@
 
 ## 3. 기술 스택
 
-*   **백엔드**: FastAPI, MySQL, SQLAlchemy, Alembic, backtesting.py, pandas, yfinance, Uvicorn
+*   **백엔드**: FastAPI, MySQL, SQLAlchemy, backtesting.py, pandas, yfinance, Uvicorn
 *   **프론트엔드**: React 18, TypeScript, Vite, Bootstrap, React Bootstrap, Tailwind CSS, Recharts, Axios
 *   **컨테이너화**: Docker, Docker Compose
 *   **웹 서버(개발)**: Vite 개발 서버 (프로덕션에서는 정적 빌드를 별도 서버로 서빙 가능)
@@ -93,6 +93,12 @@ backtest/
 
 *   **백엔드 개발**: `backend/README.md`
 *   **프론트엔드 개발**: `frontend/README.md`
+
+## 참고 (데이터 캐시 관련)
+
+- 현재 구현은 CSV 기반 로컬 캐시 대신 MySQL(DB)을 1차 저장소/캐시로 사용하는 DB-first 흐름을 따릅니다.
+- yfinance 관련 엔드포인트 및 DB 캐시 동작(예: `/api/v1/yfinance/fetch-and-cache`, v2의 DB 보충 동작)은 `doc/backend/api.md`에 자세히 정리되어 있으니 해당 문서를 참조하세요.
+ - yfinance 관련 엔드포인트 및 DB 캐시 동작은 `doc/backend/api.md`를 참조하세요.
 
 ## 7. 라이선스
 
