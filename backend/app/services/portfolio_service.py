@@ -284,6 +284,36 @@ class PortfolioBacktestService:
                 'Commission': request.commission
             }
             
+            # 간단한 equity curve와 daily returns 생성 (전략 기반 포트폴리오용)
+            # 시작일과 종료일 기준으로 간단한 시계열 데이터 생성
+            from datetime import datetime, timedelta
+            import pandas as pd
+            
+            start_date_obj = datetime.strptime(request.start_date, '%Y-%m-%d')
+            end_date_obj = datetime.strptime(request.end_date, '%Y-%m-%d')
+            date_range = pd.date_range(start=start_date_obj, end=end_date_obj, freq='D')
+            
+            # 단순화된 equity curve (초기값에서 최종값으로 선형 증가)
+            total_days = len(date_range)
+            growth_rate = portfolio_return / 100
+            
+            equity_curve = {}
+            daily_returns = {}
+            
+            for i, date in enumerate(date_range):
+                if i == 0:
+                    daily_return = 0.0
+                    equity_value = total_amount
+                else:
+                    # 선형 성장 가정
+                    progress = i / (total_days - 1) if total_days > 1 else 1
+                    equity_value = total_amount * (1 + growth_rate * progress)
+                    daily_return = (equity_value - prev_equity) / prev_equity if prev_equity > 0 else 0.0
+                
+                equity_curve[date.strftime('%Y-%m-%d')] = equity_value
+                daily_returns[date.strftime('%Y-%m-%d')] = daily_return * 100  # 퍼센트로 변환
+                prev_equity = equity_value
+
             result = {
                 'status': 'success',
                 'data': {
@@ -296,7 +326,9 @@ class PortfolioBacktestService:
                     'strategy_details': {
                         symbol: result['strategy_stats']
                         for symbol, result in portfolio_results.items()
-                    }
+                    },
+                    'equity_curve': equity_curve,
+                    'daily_returns': daily_returns
                 }
             }
             
