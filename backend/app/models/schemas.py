@@ -35,6 +35,62 @@ class StrategyParams(BaseModel):
                 return 0.0
         return v
 
+class PortfolioWeight(BaseModel):
+    """포트폴리오 가중치 모델"""
+    symbol: str = Field(..., min_length=1, max_length=10, description="주식 심볼")
+    weight: float = Field(..., gt=0, le=1.0, description="포트폴리오 내 비중 (0 < weight <= 1.0)")
+    
+    @validator('symbol')
+    def validate_symbol(cls, v):
+        if not v.isalpha():
+            raise ValueError('주식 심볼은 영문자만 포함해야 합니다.')
+        return v.upper()
+
+class PortfolioBacktestRequest(BaseModel):
+    """포트폴리오 백테스트 요청 모델"""
+    portfolio: List[PortfolioWeight] = Field(..., min_items=1, max_items=10, description="포트폴리오 구성")
+    start_date: str = Field(..., description="시작 날짜 (YYYY-MM-DD)")
+    end_date: str = Field(..., description="종료 날짜 (YYYY-MM-DD)")
+    cash: float = Field(10000, gt=0, description="초기 자본금")
+    commission: float = Field(0.002, ge=0, lt=0.1, description="수수료율 (0 ~ 0.1)")
+    rebalance_frequency: str = Field("monthly", description="리밸런싱 주기 (monthly, quarterly, yearly)")
+    
+    @validator('portfolio')
+    def validate_portfolio_weights(cls, v):
+        if not v:
+            raise ValueError('포트폴리오는 최소 1개 종목을 포함해야 합니다.')
+        
+        # 심볼 중복 확인
+        symbols = [item.symbol for item in v]
+        if len(symbols) != len(set(symbols)):
+            raise ValueError('포트폴리오에 중복된 종목이 있습니다.')
+        
+        # 가중치 합계 확인
+        total_weight = sum(item.weight for item in v)
+        if abs(total_weight - 1.0) > 0.001:  # 부동소수점 오차 허용
+            raise ValueError(f'포트폴리오 가중치 합계는 1.0이어야 합니다. (현재: {total_weight:.3f})')
+        
+        return v
+    
+    @validator('start_date', 'end_date')
+    def validate_date_format(cls, v):
+        try:
+            datetime.strptime(v, '%Y-%m-%d')
+        except ValueError:
+            raise ValueError('날짜는 YYYY-MM-DD 형식이어야 합니다.')
+        return v
+
+    @validator('end_date')
+    def validate_date_range(cls, v, values):
+        if 'start_date' in values:
+            start = datetime.strptime(values['start_date'], '%Y-%m-%d')
+            end = datetime.strptime(v, '%Y-%m-%d')
+            if end < start:
+                raise ValueError('종료 날짜는 시작 날짜보다 이후여야 합니다.')
+            if (end - start).days > 365 * 5:  # 5년 제한
+                raise ValueError('백테스트 기간은 최대 5년으로 제한됩니다.')
+        return v
+
 class BacktestRequest(BaseModel):
     """백테스트 요청 모델"""
     symbol: str = Field(..., min_length=1, max_length=10, description="주식 심볼")

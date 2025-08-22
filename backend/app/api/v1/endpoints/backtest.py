@@ -4,11 +4,14 @@
 from fastapi import APIRouter, HTTPException, status
 from ....models.requests import BacktestRequest
 from ....models.responses import BacktestResult, ErrorResponse, ChartDataResponse
+from ....models.schemas import PortfolioBacktestRequest
 from ....services.backtest_service import backtest_service
+from ....services.portfolio_service import PortfolioBacktestService
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+portfolio_service = PortfolioBacktestService()
 
 
 @router.post(
@@ -147,4 +150,66 @@ async def get_chart_data(request: BacktestRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="차트 데이터 생성 중 오류가 발생했습니다."
+        )
+
+
+@router.post(
+    "/portfolio",
+    status_code=status.HTTP_200_OK,
+    summary="포트폴리오 백테스트 실행",
+    description="여러 종목으로 구성된 포트폴리오의 백테스트를 실행합니다."
+)
+async def run_portfolio_backtest(request: PortfolioBacktestRequest):
+    """
+    포트폴리오 백테스트 실행 API
+    
+    - **portfolio**: 포트폴리오 구성 (종목과 비중)
+    - **start_date**: 백테스트 시작 날짜 (YYYY-MM-DD)
+    - **end_date**: 백테스트 종료 날짜 (YYYY-MM-DD)
+    - **cash**: 초기 투자금액
+    - **commission**: 거래 수수료 (기본값: 0.002)
+    - **rebalance_frequency**: 리밸런싱 주기 (monthly, quarterly, yearly)
+    
+    **사용 예시:**
+    ```json
+    {
+        "portfolio": [
+            {"symbol": "AAPL", "weight": 0.4},
+            {"symbol": "GOOGL", "weight": 0.3},
+            {"symbol": "MSFT", "weight": 0.3}
+        ],
+        "start_date": "2023-01-01",
+        "end_date": "2023-12-31",
+        "cash": 10000,
+        "commission": 0.002,
+        "rebalance_frequency": "monthly"
+    }
+    ```
+    """
+    try:
+        # 포트폴리오 백테스트 실행
+        result = await portfolio_service.run_portfolio_backtest(request)
+        
+        if result['status'] == 'error':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result['error']
+            )
+        
+        logger.info(f"포트폴리오 백테스트 API 완료: {len(request.portfolio)} 종목")
+        return result
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"포트폴리오 백테스트 요청 오류: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"포트폴리오 백테스트 실행 오류: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="포트폴리오 백테스트 실행 중 오류가 발생했습니다."
         ) 
