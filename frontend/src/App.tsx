@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Container, Row, Col, Card, Button, Spinner, Alert } from 'react-bootstrap';
 import { ChartDataResponse } from './types/api';
@@ -52,14 +52,6 @@ function App() {
     strategy_params: {} as any
   });
 
-  const strategyDefaults = {
-    'buy_and_hold': {},
-    'sma_crossover': { short_window: 10, long_window: 20 },
-    'rsi_strategy': { rsi_period: 14, rsi_upper: 70, rsi_lower: 30 },
-    'bollinger_bands': { period: 20, std_dev: 2.0 },
-    'macd_strategy': { fast_period: 12, slow_period: 26, signal_period: 9 }
-  };
-
   const runBacktest = async (params = backtestParams) => {
     setLoading(true);
     setError(null);
@@ -75,13 +67,7 @@ function App() {
 
   useEffect(() => { runBacktest(); }, []);
 
-  const handleParamChange = (key: string, value: any) => {
-    setBacktestParams(prev => ({
-      ...prev,
-      [key]: value,
-      ...(key === 'strategy' && { strategy_params: strategyDefaults[value] || {} })
-    }));
-  };
+  // BacktestForm handles parameter changes via props; keep App focused on orchestration.
 
   if (error) {
     return (

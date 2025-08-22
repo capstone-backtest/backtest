@@ -1,5 +1,5 @@
 import React from 'react';
-import { Row, Col, Form, Button, Spinner, Alert } from 'react-bootstrap';
+import { Row, Col, Form, Button, Spinner } from 'react-bootstrap';
 
 const BacktestForm: React.FC<any> = ({ backtestParams, setBacktestParams, runBacktest, loading }) => {
   const strategyDefaults: Record<string, any> = {
@@ -18,12 +18,7 @@ const BacktestForm: React.FC<any> = ({ backtestParams, setBacktestParams, runBac
     }));
   };
 
-  const handleStrategyParamChange = (paramKey: string, value: number) => {
-    setBacktestParams((prev: any) => ({
-      ...prev,
-      strategy_params: { ...prev.strategy_params, [paramKey]: value }
-    }));
-  };
+  // strategy-specific param inputs are currently not rendered in this simplified form.
 
   return (
     <Form onSubmit={(e) => { e.preventDefault(); runBacktest(); }}>

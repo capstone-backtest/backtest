@@ -1,5 +1,5 @@
 import React from 'react';
-import { Row, Col, Card, Badge, Alert, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Row, Col, Card, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
 
 const StatsSummary: React.FC<{ stats: any }> = ({ stats }) => {
   if (!stats) return null;
