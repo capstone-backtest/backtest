@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -133,13 +133,110 @@ def load_ticker_data(ticker: str, start_date=None, end_date=None) -> pd.DataFram
     engine = _get_engine()
     conn = engine.connect()
     try:
-        # find stock_id
+        # normalize start/end to date objects
+        def _to_date(d):
+            if d is None:
+                return None
+            if isinstance(d, str):
+                return datetime.strptime(d, "%Y-%m-%d").date()
+            if isinstance(d, (pd.Timestamp, datetime)):
+                return pd.to_datetime(d).date()
+            if isinstance(d, date):
+                return d
+            return pd.to_datetime(d).date()
+
+        start_date = _to_date(start_date)
+        end_date = _to_date(end_date)
+
+        # defaults: last 1 year if not provided
+        if end_date is None and start_date is None:
+            end_date = date.today()
+            start_date = end_date - timedelta(days=365)
+        elif start_date is None:
+            end_date = end_date or date.today()
+            start_date = end_date - timedelta(days=365)
+        elif end_date is None:
+            end_date = date.today()
+
+        # find stock_id; if missing, fetch from yfinance and save
         row = conn.execute(text("SELECT id FROM stocks WHERE ticker = :t"), {"t": ticker}).fetchone()
         if not row:
-            raise ValueError(f"티커 '{ticker}'이(가) DB에 없습니다.")
+            logger.info(f"티커 '{ticker}'이 DB에 없음 — yfinance에서 수집 시도")
+            try:
+                from app.utils.data_fetcher import data_fetcher
+                df_new = data_fetcher.get_stock_data(ticker, start_date, end_date, use_cache=True)
+                if df_new is None or df_new.empty:
+                    raise ValueError("yfinance에서 유효한 데이터가 반환되지 않았습니다.")
+                save_ticker_data(ticker, df_new)
+            except Exception as e:
+                logger.exception("티커가 DB에 없고 yfinance 수집 실패")
+                raise ValueError(f"티커 '{ticker}'이(가) DB에 없고 yfinance 수집 실패: {e}")
+
+            # re-query
+            row = conn.execute(text("SELECT id FROM stocks WHERE ticker = :t"), {"t": ticker}).fetchone()
+            if not row:
+                raise ValueError(f"티커 '{ticker}'을(를) DB에 추가할 수 없습니다.")
+
         stock_id = row[0]
 
-        # build query
+        # check existing coverage
+        date_row = conn.execute(text("SELECT MIN(date), MAX(date) FROM daily_prices WHERE stock_id = :sid"), {"sid": stock_id}).fetchone()
+        db_min, db_max = None, None
+        if date_row and date_row[0] is not None:
+            db_min = pd.to_datetime(date_row[0]).date()
+            db_max = pd.to_datetime(date_row[1]).date()
+
+        # fetch missing ranges if any
+        try:
+            from app.utils.data_fetcher import data_fetcher
+        except Exception:
+            data_fetcher = None
+
+        missing_ranges = []
+        if db_min is None:
+            # no data at all in DB for this ticker -> fetch full requested range
+            missing_ranges.append((start_date, end_date))
+        else:
+            if start_date < db_min:
+                missing_ranges.append((start_date, db_min - timedelta(days=1)))
+            if end_date > db_max:
+                missing_ranges.append((db_max + timedelta(days=1), end_date))
+
+        # If there are multiple small missing ranges, try to coalesce into one padded fetch
+        if missing_ranges and data_fetcher is not None:
+            min_start = min(s for s, _ in missing_ranges if s is not None)
+            max_end = max(e for _, e in missing_ranges if e is not None)
+            PAD_DAYS = 3
+            co_start = max(min_start - timedelta(days=PAD_DAYS), date(1970, 1, 1))
+            co_end = min(max_end + timedelta(days=PAD_DAYS), date.today())
+            try:
+                logger.info(f"DB에 누락된 기간을 yfinance에서 가져옵니다(통합+패드): {ticker} {co_start} -> {co_end}")
+                df_new = data_fetcher.get_stock_data(ticker, co_start, co_end, use_cache=True)
+                if df_new is not None and not df_new.empty:
+                    save_ticker_data(ticker, df_new)
+                else:
+                    logger.warning("통합 fetch가 빈 결과를 반환했습니다; 개별 구간으로 폴백합니다.")
+                    raise ValueError("empty result from consolidated fetch")
+            except Exception:
+                logger.exception("통합 누락 기간 수집 실패, 개별 구간 시도 중")
+                # fallback: try per-range fetch as before
+                for s, e in missing_ranges:
+                    if s is None or e is None:
+                        continue
+                    if s > e:
+                        continue
+                    try:
+                        logger.info(f"DB에 누락된 기간을 yfinance에서 가져옵니다: {ticker} {s} -> {e}")
+                        df_new = data_fetcher.get_stock_data(ticker, s, e, use_cache=True)
+                        if df_new is not None and not df_new.empty:
+                            save_ticker_data(ticker, df_new)
+                    except Exception:
+                        logger.exception("누락 기간 수집 실패")
+        else:
+            if data_fetcher is None and missing_ranges:
+                logger.warning("data_fetcher 모듈을 찾을 수 없어 누락 데이터를 가져올 수 없습니다.")
+
+        # build query to return requested interval
         q = "SELECT date, open, high, low, close, adj_close, volume FROM daily_prices WHERE stock_id = :sid"
         params = {"sid": stock_id}
         if start_date:
@@ -153,7 +250,7 @@ def load_ticker_data(ticker: str, start_date=None, end_date=None) -> pd.DataFram
         res = conn.execute(text(q), params)
         rows = res.fetchall()
         if not rows:
-            return pd.DataFrame()
+            raise ValueError(f"티커 '{ticker}'에 대한 데이터가 없습니다. (요청 범위: {start_date} - {end_date})")
 
         df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "adj_close", "volume"])
         df['date'] = pd.to_datetime(df['date'])

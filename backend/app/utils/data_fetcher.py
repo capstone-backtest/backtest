@@ -15,14 +15,15 @@ logger = logging.getLogger(__name__)
 
 class DataFetcher:
     """주식 데이터 수집 클래스"""
-    
+
     def __init__(self, cache_dir: str = "data_cache"):
         """
         Args:
             cache_dir: 데이터 캐시 디렉토리
         """
+        # CSV 캐시 비활성화: 디렉토리 유지하되 사용하지 않습니다.
+        # (디렉토리는 만들지 않음 — 파일 I/O를 완전히 비활성화합니다)
         self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(exist_ok=True)
     
     def get_stock_data(
         self,
@@ -49,34 +50,7 @@ class DataFetcher:
             # 티커를 대문자로 변환
             ticker = ticker.upper()
             
-            # 캐시 파일 경로
-            cache_file = self.cache_dir / f"{ticker}_{start_date}_{end_date}.csv"
-            
-            # 캐시된 데이터 확인
-            if use_cache and cache_file.exists():
-                # 과거 데이터인지 확인 (종료일이 오늘 이전이면 과거 데이터)
-                is_historical = end_date < date.today()
-                
-                if is_historical:
-                    # 과거 데이터는 영구 캐시 (시간 체크 없음)
-                    logger.info(f"과거 데이터 캐시 사용 (영구): {ticker}")
-                    try:
-                        data = pd.read_csv(cache_file, index_col=0, parse_dates=True)
-                        if not data.empty and len(data) > 0:
-                            return data
-                    except Exception as e:
-                        logger.warning(f"캐시 파일 읽기 실패, 새로 다운로드: {e}")
-                else:
-                    # 현재/미래 데이터만 시간 체크
-                    file_time = datetime.fromtimestamp(cache_file.stat().st_mtime)
-                    if (datetime.now() - file_time).total_seconds() < cache_hours * 3600:
-                        logger.info(f"최신 데이터 캐시 사용 ({cache_hours}시간 유효): {ticker}")
-                        try:
-                            data = pd.read_csv(cache_file, index_col=0, parse_dates=True)
-                            if not data.empty and len(data) > 0:
-                                return data
-                        except Exception as e:
-                            logger.warning(f"캐시 파일 읽기 실패, 새로 다운로드: {e}")
+            # CSV 캐시 비활성화: 캐시 파일을 사용하지 않습니다.
             
             # Yahoo Finance에서 데이터 다운로드
             logger.info(f"Yahoo Finance에서 데이터 다운로드: {ticker}")
@@ -91,37 +65,50 @@ class DataFetcher:
             # 데이터 다운로드 시도
             data = None
             error_messages = []
-            
-            # 방법 1: stock.history() 사용
-            try:
-                data = stock.history(
-                    start=start_str,
-                    end=end_str,
-                    auto_adjust=True,
-                    prepost=False
-                )
-                if data is not None and not data.empty:
-                    logger.info(f"stock.history()로 데이터 수집 성공: {ticker}")
-            except Exception as e:
-                error_messages.append(f"stock.history() 실패: {e}")
-                logger.warning(f"stock.history() 실패: {e}")
-            
-            # 방법 2: yf.download() 사용 (첫 번째 방법이 실패한 경우)
+
+            def _try_download(s_str, e_str, method='history'):
+                nonlocal data
+                try:
+                    if method == 'history':
+                        d = stock.history(start=s_str, end=e_str, auto_adjust=True, prepost=False)
+                    else:
+                        d = yf.download(ticker, start=s_str, end=e_str, auto_adjust=True, prepost=False, progress=False, threads=False)
+                    if d is not None and not d.empty:
+                        data = d
+                        logger.info(f"{method}로 데이터 수집 성공: {ticker} ({s_str} -> {e_str})")
+                        return True
+                except Exception as e:
+                    error_messages.append(f"{method} 실패: {e}")
+                    logger.warning(f"{method} 실패: {e}")
+                return False
+
+            # 시도 1: 요청 범위
+            _try_download(start_str, end_str, method='history')
+            if data is None or data.empty:
+                _try_download(start_str, end_str, method='download')
+
+            # 시도 2: 범위 확장 재시도 (+/- 3일, +/-7일)
             if data is None or data.empty:
                 try:
-                    data = yf.download(
-                        ticker,
-                        start=start_str,
-                        end=end_str,
-                        auto_adjust=True,
-                        prepost=False,
-                        progress=False
-                    )
-                    if data is not None and not data.empty:
-                        logger.info(f"yf.download()로 데이터 수집 성공: {ticker}")
+                    s_dt = datetime.strptime(start_str, '%Y-%m-%d') - pd.Timedelta(days=3)
+                    e_dt = datetime.strptime(end_str, '%Y-%m-%d') + pd.Timedelta(days=3)
+                    s2 = s_dt.strftime('%Y-%m-%d')
+                    e2 = e_dt.strftime('%Y-%m-%d')
+                    logger.info(f"데이터가 없음: 범위를 확장해 재시도 (+/-3일): {s2} -> {e2}")
+                    _try_download(s2, e2, method='history') or _try_download(s2, e2, method='download')
                 except Exception as e:
-                    error_messages.append(f"yf.download() 실패: {e}")
-                    logger.warning(f"yf.download() 실패: {e}")
+                    logger.warning(f"범위 확장 +/-3일 재시도 실패: {e}")
+
+            if data is None or data.empty:
+                try:
+                    s_dt = datetime.strptime(start_str, '%Y-%m-%d') - pd.Timedelta(days=7)
+                    e_dt = datetime.strptime(end_str, '%Y-%m-%d') + pd.Timedelta(days=7)
+                    s3 = s_dt.strftime('%Y-%m-%d')
+                    e3 = e_dt.strftime('%Y-%m-%d')
+                    logger.info(f"데이터가 없음: 범위를 확장해 재시도 (+/-7일): {s3} -> {e3}")
+                    _try_download(s3, e3, method='history') or _try_download(s3, e3, method='download')
+                except Exception as e:
+                    logger.warning(f"범위 확장 +/-7일 재시도 실패: {e}")
             
             # 데이터 검증
             if data is None or data.empty:
@@ -178,13 +165,7 @@ class DataFetcher:
             if len(data) < 5:
                 logger.warning(f"데이터가 너무 적습니다: {ticker}, {len(data)} 레코드")
             
-            # 캐시에 저장
-            if use_cache:
-                try:
-                    data.to_csv(cache_file)
-                    logger.info(f"데이터 캐시 저장: {cache_file}")
-                except Exception as e:
-                    logger.warning(f"캐시 저장 실패: {e}")
+            # CSV 캐시 비활성화: 파일로 저장하지 않습니다.
             
             logger.info(f"데이터 수집 완료: {ticker}, {len(data)} 레코드")
             return data
@@ -274,19 +255,8 @@ class DataFetcher:
         Args:
             ticker: 특정 티커의 캐시만 삭제 (None이면 전체 삭제)
         """
-        try:
-            if ticker:
-                ticker = ticker.upper()
-                pattern = f"{ticker}_*.csv"
-                for file in self.cache_dir.glob(pattern):
-                    file.unlink()
-                    logger.info(f"캐시 삭제: {file}")
-            else:
-                for file in self.cache_dir.glob("*.csv"):
-                    file.unlink()
-                logger.info("전체 캐시 삭제 완료")
-        except Exception as e:
-            logger.error(f"캐시 삭제 실패: {e}")
+    # 캐시 사용이 비활성화되어 있어 삭제할 파일이 없습니다.
+    logger.info("CSV 캐시 비활성화: clear_cache는 동작하지 않습니다.")
 
 
 # 글로벌 인스턴스
