@@ -85,17 +85,7 @@ async def startup_event():
     logger.info(f"{settings.project_name} v{settings.version} 시작됨")
     logger.info(f"문서 URL: http://{settings.host}:{settings.port}{settings.api_v1_str}/docs")
     
-    # 캐시 디렉토리 생성
-    from .utils.data_fetcher import data_fetcher
-    cache_dir = getattr(data_fetcher, 'cache_dir', None)
-    if cache_dir:
-        try:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"데이터 캐시 디렉토리: {cache_dir}")
-        except Exception as e:
-            logger.warning(f"캐시 디렉토리 생성 실패: {e}")
-    else:
-        logger.info("파일 기반 데이터 캐시 비활성화: 캐시 디렉토리 생성 건너뜀")
+    # 로컬 파일 기반 캐시 기능을 제거했으므로 스타트업에서 디렉토리 생성 작업을 하지 않습니다.
 
 
 @app.on_event("shutdown")

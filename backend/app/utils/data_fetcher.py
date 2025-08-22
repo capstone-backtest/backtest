@@ -16,15 +16,9 @@ logger = logging.getLogger(__name__)
 class DataFetcher:
     """주식 데이터 수집 클래스"""
 
-    def __init__(self, cache_dir: str = ""):
-        """
-        Args:
-            cache_dir: 데이터 캐시 디렉토리
-        """
-        # CSV 캐시 비활성화: 디렉토리 유지하되 사용하지 않습니다.
-        # (디렉토리는 만들지 않음 — 파일 I/O를 완전히 비활성화합니다)
-        self.cache_dir = Path(cache_dir) if cache_dir else None
-    
+    def __init__(self):
+        pass
+
     def get_stock_data(
         self,
         ticker: str,
@@ -247,16 +241,6 @@ class DataFetcher:
                 'sector': 'Unknown',
                 'industry': 'Unknown'
             }
-    
-    def clear_cache(self, ticker: Optional[str] = None):
-        """
-        캐시 삭제
-        
-        Args:
-            ticker: 특정 티커의 캐시만 삭제 (None이면 전체 삭제)
-        """
-    # 캐시 사용이 비활성화되어 있어 삭제할 파일이 없습니다.
-    logger.info("CSV 캐시 비활성화: clear_cache는 동작하지 않습니다.")
 
 
 # 글로벌 인스턴스

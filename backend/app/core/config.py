@@ -53,11 +53,6 @@ class Settings(BaseSettings):
     max_backtest_duration_days: int = 3650  # 10년
     default_commission: float = 0.002  # 0.2%
     
-    # 데이터 설정
-    # 빈 문자열이면 파일 캐시를 완전히 비활성화합니다.
-    data_cache_dir: str = ""
-    max_cache_age_hours: int = 24
-    
     # 최적화 설정
     max_optimization_iterations: int = 1000
     optimization_timeout_seconds: int = 300  # 5분
