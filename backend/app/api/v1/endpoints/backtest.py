@@ -7,6 +7,8 @@ from ....models.responses import BacktestResult, ErrorResponse, ChartDataRespons
 from ....models.schemas import PortfolioBacktestRequest
 from ....services.backtest_service import backtest_service
 from ....services.portfolio_service import PortfolioBacktestService
+from ....services.yfinance_db import load_ticker_data
+from ....utils.data_fetcher import data_fetcher
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,11 +21,11 @@ portfolio_service = PortfolioBacktestService()
     response_model=BacktestResult,
     status_code=status.HTTP_200_OK,
     summary="백테스트 실행",
-    description="주어진 전략과 파라미터로 백테스트를 실행합니다."
+    description="주어진 전략과 파라미터로 백테스트를 실행합니다. (DB 소스 우선 사용)"
 )
 async def run_backtest(request: BacktestRequest):
     """
-    백테스트 실행 API
+    백테스트 실행 API (v2 개선사항 적용)
     
     - **ticker**: 주식 티커 심볼 (예: AAPL, GOOGL)
     - **start_date**: 백테스트 시작 날짜 (YYYY-MM-DD)
@@ -32,16 +34,34 @@ async def run_backtest(request: BacktestRequest):
     - **strategy**: 사용할 전략명
     - **strategy_params**: 전략별 파라미터 (선택사항)
     - **commission**: 거래 수수료 (기본값: 0.002)
+    
+    v2 개선사항: DB에서 데이터를 우선 사용하고, 없을 경우 yfinance 사용
     """
     try:
-        # 요청 유효성 검증
-        backtest_service.validate_backtest_request(request)
+        # v2 방식: DB에서 데이터 로드 시도
+        df = load_ticker_data(request.ticker, request.start_date, request.end_date)
         
-        # 백테스트 실행
-        result = await backtest_service.run_backtest(request)
-        
-        logger.info(f"백테스트 API 완료: {request.ticker}")
-        return result
+        if df is not None and not df.empty:
+            # DB 데이터가 있으면 사용 (v2 방식)
+            original_get = data_fetcher.get_stock_data
+
+            def _get_stock_data_override(*args, **kwargs):
+                return df
+
+            data_fetcher.get_stock_data = _get_stock_data_override
+
+            try:
+                result = await backtest_service.run_backtest(request)
+                logger.info(f"백테스트 API 완료 (DB 소스): {request.ticker}")
+                return result
+            finally:
+                data_fetcher.get_stock_data = original_get
+        else:
+            # DB에 데이터가 없으면 기존 v1 방식 사용
+            backtest_service.validate_backtest_request(request)
+            result = await backtest_service.run_backtest(request)
+            logger.info(f"백테스트 API 완료 (yfinance 소스): {request.ticker}")
+            return result
         
     except ValueError as e:
         logger.error(f"백테스트 요청 오류: {str(e)}")
@@ -96,11 +116,11 @@ async def backtest_health():
     response_model=ChartDataResponse,
     status_code=status.HTTP_200_OK,
     summary="백테스트 차트 데이터",
-    description="백테스트 결과를 Recharts용 차트 데이터로 반환합니다."
+    description="백테스트 결과를 Recharts용 차트 데이터로 반환합니다. (DB 소스 우선 사용)"
 )
 async def get_chart_data(request: BacktestRequest):
     """
-    백테스트 차트 데이터 API
+    백테스트 차트 데이터 API (v2 개선사항 적용)
     
     백테스트를 실행하고 결과를 Recharts 라이브러리에서 사용할 수 있는 
     JSON 형태의 차트 데이터로 반환합니다.
@@ -128,16 +148,34 @@ async def get_chart_data(request: BacktestRequest):
       <Line dataKey="drawdown_pct" stroke="#ff0000" />
     </LineChart>
     ```
+    
+    v2 개선사항: DB에서 데이터를 우선 사용하고, 없을 경우 yfinance 사용
     """
     try:
-        # 요청 유효성 검증
-        backtest_service.validate_backtest_request(request)
+        # v2 방식: DB에서 데이터 로드 시도
+        df = load_ticker_data(request.ticker, request.start_date, request.end_date)
         
-        # 차트 데이터 생성
-        chart_data = await backtest_service.generate_chart_data(request)
-        
-        logger.info(f"차트 데이터 API 완료: {request.ticker}, 데이터 포인트: {len(chart_data.ohlc_data)}")
-        return chart_data
+        if df is not None and not df.empty:
+            # DB 데이터가 있으면 사용 (v2 방식)
+            original_get = data_fetcher.get_stock_data
+
+            def _get_stock_data_override(*args, **kwargs):
+                return df
+
+            data_fetcher.get_stock_data = _get_stock_data_override
+
+            try:
+                chart_data = await backtest_service.generate_chart_data(request)
+                logger.info(f"차트 데이터 API 완료 (DB 소스): {request.ticker}, 데이터 포인트: {len(chart_data.ohlc_data)}")
+                return chart_data
+            finally:
+                data_fetcher.get_stock_data = original_get
+        else:
+            # DB에 데이터가 없으면 기존 v1 방식 사용
+            backtest_service.validate_backtest_request(request)
+            chart_data = await backtest_service.generate_chart_data(request)
+            logger.info(f"차트 데이터 API 완료 (yfinance 소스): {request.ticker}, 데이터 포인트: {len(chart_data.ohlc_data)}")
+            return chart_data
         
     except ValueError as e:
         logger.error(f"차트 데이터 요청 오류: {str(e)}")

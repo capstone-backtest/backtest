@@ -9,10 +9,6 @@ from datetime import datetime
 
 from .core.config import settings
 from .api.v1.api import api_router
-try:
-    from .api.v2.api import api_router as api_router_v2
-except Exception:
-    api_router_v2 = None
 from .models.responses import HealthResponse
 
 # 로깅 설정
@@ -43,8 +39,6 @@ app.add_middleware(
 
 # API 라우터 포함
 app.include_router(api_router, prefix=settings.api_v1_str)
-if api_router_v2:
-    app.include_router(api_router_v2, prefix="/api/v2")
 
 
 @app.get("/", include_in_schema=False)
