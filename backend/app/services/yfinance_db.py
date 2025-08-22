@@ -172,7 +172,11 @@ def load_ticker_data(ticker: str, start_date=None, end_date=None) -> pd.DataFram
                 logger.exception("티커가 DB에 없고 yfinance 수집 실패")
                 raise ValueError(f"티커 '{ticker}'이(가) DB에 없고 yfinance 수집 실패: {e}")
 
-            # re-query
+            # re-query using a fresh connection to avoid transaction snapshot issues
+            # (some MySQL isolation levels like REPEATABLE READ may not see rows inserted
+            #  by a different connection within the same snapshot)
+            conn.close()
+            conn = engine.connect()
             row = conn.execute(text("SELECT id FROM stocks WHERE ticker = :t"), {"t": ticker}).fetchone()
             if not row:
                 raise ValueError(f"티커 '{ticker}'을(를) DB에 추가할 수 없습니다.")
