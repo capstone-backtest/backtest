@@ -54,6 +54,8 @@ class PortfolioBacktestRequest(BaseModel):
     cash: float = Field(10000, gt=0, description="초기 자본금")
     commission: float = Field(0.002, ge=0, lt=0.1, description="수수료율 (0 ~ 0.1)")
     rebalance_frequency: str = Field("monthly", description="리밸런싱 주기 (monthly, quarterly, yearly)")
+    strategy: str = Field("buy_and_hold", description="전략명")
+    strategy_params: Optional[Dict[str, Any]] = Field(default_factory=dict, description="전략 파라미터")
     
     @validator('portfolio')
     def validate_portfolio_weights(cls, v):
