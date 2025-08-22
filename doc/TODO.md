@@ -15,9 +15,8 @@
 
 ## 다음 정리 작업 (제가 도와드릴 수 있음)
 
-- [ ] 중복 내용 병합: `doc/backend/api.md`와 루트 `README.md`의 yfinance/엔드포인트 설명 중복 제거 및 하나의 진입점으로 병합
- - [x] 중복 내용 병합: yfinance/엔드포인트 설명은 `doc/backend/api.md`를 현재의 단일 진입점으로 정리했습니다.
-- [ ] 프론트엔드 컴포넌트 문서(`doc/frontend/COMPONENTS.md`)에서 코드 예시를 최신 `frontend/src/components` 구조에 맞게 정리
+- [x] 중복 내용 병합: yfinance/엔드포인트 설명은 `doc/backend/api.md`를 단일 진입점으로 정리했습니다.
+- [x] 프론트엔드 컴포넌트 문서(`doc/frontend/COMPONENTS.md`)를 `frontend/src/components` 구조에 맞게 업데이트했습니다.
 - [ ] 문서 스타일 통일: 마크다운 헤더 레벨·용어(예: API vs 엔드포인트) 표준화
 - [ ] (선택) MkDocs 설정을 추가해 정적 문서 사이트로 빌드 가능하게 구성
 
@@ -39,7 +38,7 @@
 
 ## 검증 체크리스트
 
-- [ ] 모든 변경 후 `python -c "import sys; sys.path.insert(0, 'backend'); import app; print('IMPORT_OK')"`로 모듈 임포트 확인
+- [x] 모든 변경 후 `python -c "import sys; sys.path.insert(0, 'backend'); import app; print('IMPORT_OK')"`로 모듈 임포트 확인 (세션에서 실행되어 `IMPORT_OK` 확인됨)
 - [ ] `docker compose up --build`로 전체 스택을 띄운 뒤 프론트엔드/백엔드 E2E 시나리오(예: 브라우저에서 백테스트 실행)를 재현
 
 ---
