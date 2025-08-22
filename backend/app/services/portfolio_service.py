@@ -8,7 +8,9 @@ from datetime import datetime, timedelta
 import logging
 
 from app.models.schemas import PortfolioBacktestRequest, PortfolioWeight
+from app.models.requests import BacktestRequest
 from app.services.yfinance_db import load_ticker_data
+from app.services.backtest_service import backtest_service
 from app.utils.serializers import recursive_serialize
 
 logger = logging.getLogger(__name__)
@@ -165,6 +167,149 @@ class PortfolioBacktestService:
             백테스트 결과
         """
         try:
+            logger.info(f"포트폴리오 백테스트 시작: 전략={request.strategy}, 종목수={len(request.portfolio)}")
+            
+            # 전략이 buy_and_hold가 아닌 경우 개별 종목별로 전략 백테스트 실행
+            if request.strategy != "buy_and_hold":
+                return await self.run_strategy_portfolio_backtest(request)
+            else:
+                return await self.run_buy_and_hold_portfolio_backtest(request)
+                
+        except Exception as e:
+            logger.exception("포트폴리오 백테스트 실행 중 오류 발생")
+            return {
+                'status': 'error',
+                'error': str(e),
+                'code': 'PORTFOLIO_BACKTEST_ERROR'
+            }
+    
+    async def run_strategy_portfolio_backtest(self, request: PortfolioBacktestRequest) -> Dict[str, Any]:
+        """
+        전략 기반 포트폴리오 백테스트 실행
+        각 종목에 동일한 전략을 적용하고 가중치로 결합
+        """
+        try:
+            portfolio_results = {}
+            individual_returns = {}
+            total_portfolio_value = 0
+            
+            logger.info(f"전략 기반 백테스트: {request.strategy}")
+            
+            # 각 종목별로 전략 백테스트 실행
+            for item in request.portfolio:
+                symbol = item.symbol
+                weight = item.weight
+                allocated_cash = request.initial_capital * weight
+                
+                logger.info(f"종목 {symbol} 전략 백테스트 실행 (가중치: {weight:.3f}, 자본: ${allocated_cash:,.2f})")
+                
+                # 개별 종목 백테스트 요청 생성
+                backtest_req = BacktestRequest(
+                    ticker=symbol,
+                    start_date=request.start_date,
+                    end_date=request.end_date,
+                    initial_cash=allocated_cash,
+                    strategy=request.strategy,
+                    strategy_params=request.strategy_params or {}
+                )
+                
+                try:
+                    # 개별 종목 백테스트 실행
+                    result = await backtest_service.run_backtest(backtest_req)
+                    
+                    if result and 'final_equity' in result:
+                        final_value = result['final_equity']
+                        initial_value = allocated_cash
+                        stock_return = (final_value / initial_value - 1) * 100
+                        
+                        portfolio_results[symbol] = {
+                            'initial_value': initial_value,
+                            'final_value': final_value,
+                            'return_pct': stock_return,
+                            'weight': weight,
+                            'strategy_stats': result
+                        }
+                        
+                        individual_returns[symbol] = {
+                            'weight': weight,
+                            'return': stock_return,
+                            'initial_value': initial_value,
+                            'final_value': final_value,
+                            'trades': result.get('num_trades', 0),
+                            'win_rate': result.get('win_rate_pct', 0)
+                        }
+                        
+                        total_portfolio_value += final_value
+                        
+                        logger.info(f"종목 {symbol} 완료: {stock_return:.2f}% 수익률")
+                    else:
+                        logger.warning(f"종목 {symbol} 백테스트 실패")
+                        
+                except Exception as e:
+                    logger.error(f"종목 {symbol} 백테스트 오류: {str(e)}")
+                    continue
+            
+            if not portfolio_results:
+                raise ValueError("모든 종목의 백테스트가 실패했습니다.")
+            
+            # 포트폴리오 전체 통계 계산
+            portfolio_return = (total_portfolio_value / request.initial_capital - 1) * 100
+            total_trades = sum(result.get('strategy_stats', {}).get('num_trades', 0) 
+                             for result in portfolio_results.values())
+            
+            # 가중 평균 승률 계산
+            weighted_win_rate = sum(
+                result['weight'] * result.get('strategy_stats', {}).get('win_rate_pct', 0)
+                for result in portfolio_results.values()
+            )
+            
+            portfolio_statistics = {
+                'Start': request.start_date,
+                'End': request.end_date,
+                'Strategy': request.strategy,
+                'Strategy_Params': request.strategy_params,
+                'Initial_Value': request.initial_capital,
+                'Final_Value': total_portfolio_value,
+                'Total_Return': portfolio_return,
+                'Total_Trades': total_trades,
+                'Portfolio_Win_Rate': weighted_win_rate,
+                'Active_Stocks': len(portfolio_results),
+                'Commission': request.commission
+            }
+            
+            result = {
+                'status': 'success',
+                'data': {
+                    'portfolio_statistics': portfolio_statistics,
+                    'individual_returns': individual_returns,
+                    'portfolio_composition': [
+                        {'symbol': symbol, 'weight': result['weight']}
+                        for symbol, result in portfolio_results.items()
+                    ],
+                    'strategy_details': {
+                        symbol: result['strategy_stats']
+                        for symbol, result in portfolio_results.items()
+                    }
+                }
+            }
+            
+            logger.info(f"전략 포트폴리오 백테스트 완료: 총 수익률 {portfolio_return:.2f}%")
+            
+            return recursive_serialize(result)
+            
+        except Exception as e:
+            logger.exception("전략 포트폴리오 백테스트 실행 중 오류 발생")
+            return {
+                'status': 'error',
+                'error': str(e),
+                'code': 'STRATEGY_PORTFOLIO_BACKTEST_ERROR'
+            }
+    
+    async def run_buy_and_hold_portfolio_backtest(self, request: PortfolioBacktestRequest) -> Dict[str, Any]:
+        """
+        기존 Buy & Hold 포트폴리오 백테스트 실행 (기존 로직 유지)
+        """
+        try:
             # 각 종목의 데이터 수집
             portfolio_data = {}
             weights = {}
@@ -204,7 +349,7 @@ class PortfolioBacktestService:
             
             # 통계 계산
             logger.info("포트폴리오 통계 계산 중...")
-            statistics = self.calculate_portfolio_statistics(portfolio_result, request.cash)
+            statistics = self.calculate_portfolio_statistics(portfolio_result, request.initial_capital)
             
             # 개별 종목 수익률 (참고용)
             individual_returns = {}
@@ -231,7 +376,7 @@ class PortfolioBacktestService:
                         for symbol, weight in weights.items()
                     ],
                     'equity_curve': {
-                        date.strftime('%Y-%m-%d'): value * request.cash
+                        date.strftime('%Y-%m-%d'): value * request.initial_capital
                         for date, value in portfolio_result['Portfolio_Value'].items()
                     },
                     'daily_returns': {
@@ -241,14 +386,14 @@ class PortfolioBacktestService:
                 }
             }
             
-            logger.info(f"포트폴리오 백테스트 완료: 총 수익률 {statistics['Total_Return']:.2f}%")
+            logger.info(f"Buy & Hold 포트폴리오 백테스트 완료: 총 수익률 {statistics['Total_Return']:.2f}%")
             
             return recursive_serialize(result)
             
         except Exception as e:
-            logger.exception("포트폴리오 백테스트 실행 중 오류 발생")
+            logger.exception("Buy & Hold 포트폴리오 백테스트 실행 중 오류 발생")
             return {
                 'status': 'error',
                 'error': str(e),
-                'code': 'PORTFOLIO_BACKTEST_ERROR'
+                'code': 'BUY_HOLD_PORTFOLIO_BACKTEST_ERROR'
             }

@@ -1,4 +1,21 @@
 // API 타입 정의
+
+// 포트폴리오 구성 요소
+export interface PortfolioStock {
+  symbol: string;
+  weight: number;
+}
+
+// 통합 백테스트 요청
+export interface UnifiedBacktestRequest {
+  portfolio: PortfolioStock[];
+  start_date: string;
+  end_date: string;
+  initial_capital: number;
+  strategy: string;
+  strategy_params?: Record<string, any>;
+}
+
 export interface ChartDataPoint {
   timestamp: string;
   date: string;

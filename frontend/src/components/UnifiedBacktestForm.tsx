@@ -1,74 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Card, Table, Alert, Tabs, Tab } from 'react-bootstrap';
+﻿import React, { useState, useEffect } from 'react';
+import { Form, Row, Col, Button, Table, Card, Container, Alert } from 'react-bootstrap';
+import { UnifiedBacktestRequest } from '../types/api';
 
 interface Stock {
   symbol: string;
   weight: number;
 }
 
-interface UnifiedBacktestRequest {
-  portfolio: Stock[];
-  start_date: string;
-  end_date: string;
-  cash: number;
-  commission: number;
-  rebalance_frequency: string;
-  strategy: string;
-  strategy_params: Record<string, any>;
-}
-
 interface UnifiedBacktestFormProps {
-  onSubmit: (request: UnifiedBacktestRequest) => void;
-  isLoading: boolean;
+  onSubmit: (request: UnifiedBacktestRequest) => Promise<void>;
+  loading?: boolean;
 }
 
-const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isLoading }) => {
-  const [activeTab, setActiveTab] = useState<'single' | 'portfolio'>('single');
-  const [portfolio, setPortfolio] = useState<Stock[]>([
-    { symbol: 'AAPL', weight: 1.0 }
-  ]);
-  
-  const [formData, setFormData] = useState({
-    start_date: '2023-01-01',
-    end_date: '2023-12-31',
-    cash: 10000,
-    commission: 0.002,
-    rebalance_frequency: 'monthly',
-    strategy: 'buy_and_hold',
-    strategy_params: {} as Record<string, any>
-  });
-
+const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loading = false }) => {
+  const [portfolio, setPortfolio] = useState<Stock[]>([{ symbol: '', weight: 1.0 }]);
+  const [startDate, setStartDate] = useState('2023-01-01');
+  const [endDate, setEndDate] = useState('2024-12-31');
+  const [initialCapital, setInitialCapital] = useState(10000);
+  const [selectedStrategy, setSelectedStrategy] = useState('buy_and_hold');
+  const [strategyParams, setStrategyParams] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // 전략별 기본 파라미터
-  const strategyDefaults: Record<string, any> = {
-    'buy_and_hold': {},
-    'sma_crossover': { short_window: 10, long_window: 20 },
-    'rsi_strategy': { rsi_period: 14, rsi_upper: 70, rsi_lower: 30 },
-    'bollinger_bands': { period: 20, std_dev: 2.0 },
-    'macd_strategy': { fast_period: 12, slow_period: 26, signal_period: 9 }
+  // 전략별 파라미터 정의
+  const strategyConfigs = {
+    buy_and_hold: { parameters: {} },
+    sma_crossover: {
+      parameters: {
+        short_window: { type: 'int', default: 10, min: 5, max: 50 },
+        long_window: { type: 'int', default: 20, min: 10, max: 100 }
+      }
+    },
+    rsi_strategy: {
+      parameters: {
+        rsi_period: { type: 'int', default: 14, min: 5, max: 30 },
+        rsi_oversold: { type: 'int', default: 30, min: 10, max: 40 },
+        rsi_overbought: { type: 'int', default: 70, min: 60, max: 90 }
+      }
+    }
   };
 
-  // 탭 변경 시 포트폴리오 초기화
+  // 전략 변경 시 기본값 설정
   useEffect(() => {
-    if (activeTab === 'single') {
-      setPortfolio([{ symbol: 'AAPL', weight: 1.0 }]);
+    const config = strategyConfigs[selectedStrategy as keyof typeof strategyConfigs];
+    if (config && config.parameters) {
+      const defaultParams: Record<string, any> = {};
+      Object.entries(config.parameters).forEach(([key, param]) => {
+        defaultParams[key] = (param as any).default;
+      });
+      setStrategyParams(defaultParams);
     } else {
-      setPortfolio([
-        { symbol: 'AAPL', weight: 0.4 },
-        { symbol: 'GOOGL', weight: 0.3 },
-        { symbol: 'MSFT', weight: 0.3 }
-      ]);
+      setStrategyParams({});
     }
-  }, [activeTab]);
-
-  // 전략 변경 시 파라미터 초기화
-  useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      strategy_params: strategyDefaults[formData.strategy] || {}
-    }));
-  }, [formData.strategy]);
+  }, [selectedStrategy]);
 
   const validatePortfolio = (): string[] => {
     const validationErrors: string[] = [];
@@ -95,8 +79,8 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
       validationErrors.push('모든 종목 심볼을 입력해주세요.');
     }
 
-    // 가중치 검사 (단일 종목은 제외)
-    if (activeTab === 'portfolio') {
+    // 가중치 검사 (여러 종목일 때만)
+    if (portfolio.length > 1) {
       const totalWeight = portfolio.reduce((sum, stock) => sum + stock.weight, 0);
       if (Math.abs(totalWeight - 1.0) > 0.001) {
         validationErrors.push(`가중치 합계는 1.0이어야 합니다. (현재: ${totalWeight.toFixed(3)})`);
@@ -143,174 +127,103 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
   };
 
   const updateStrategyParam = (key: string, value: any) => {
-    setFormData(prev => ({
+    setStrategyParams(prev => ({
       ...prev,
-      strategy_params: {
-        ...prev.strategy_params,
-        [key]: value
-      }
+      [key]: value
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const validationErrors = validatePortfolio();
-    setErrors(validationErrors);
+  const generateStrategyParams = () => {
+    const config = strategyConfigs[selectedStrategy as keyof typeof strategyConfigs];
+    if (!config || !config.parameters) return {};
 
-    if (validationErrors.length === 0) {
-      const request: UnifiedBacktestRequest = {
-        portfolio: portfolio.map(stock => ({
-          symbol: stock.symbol.toUpperCase(),
-          weight: stock.weight
-        })),
-        ...formData
-      };
-      onSubmit(request);
+    const params: Record<string, any> = {};
+    Object.entries(config.parameters).forEach(([key, paramConfig]) => {
+      const value = strategyParams[key];
+      if (value !== undefined) {
+        params[key] = (paramConfig as any).type === 'int' ? parseInt(value) : value;
+      }
+    });
+    return params;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrors([]);
+
+    const validationErrors = validatePortfolio();
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // 포트폴리오 데이터 준비
+      const portfolioData = portfolio.map(stock => ({
+        symbol: stock.symbol.toUpperCase(),
+        weight: portfolio.length === 1 ? 1.0 : stock.weight // 단일 종목일 때는 가중치 1.0
+      }));
+
+      const params = generateStrategyParams();
+      console.log('Strategy params being sent:', params);
+
+      await onSubmit({
+        portfolio: portfolioData,
+        start_date: startDate,
+        end_date: endDate,
+        initial_capital: initialCapital,
+        strategy: selectedStrategy || 'buy_and_hold',
+        strategy_params: params
+      });
+    } catch (error) {
+      console.error('백테스트 실행 중 오류:', error);
+      setErrors(['백테스트 실행 중 오류가 발생했습니다.']);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const renderStrategyParams = () => {
-    const params = formData.strategy_params;
-    
-    switch (formData.strategy) {
-      case 'sma_crossover':
-        return (
-          <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>단기 이동평균 기간</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.short_window || 10}
-                  onChange={(e) => updateStrategyParam('short_window', parseInt(e.target.value))}
-                  min="2" max="200"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>장기 이동평균 기간</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.long_window || 20}
-                  onChange={(e) => updateStrategyParam('long_window', parseInt(e.target.value))}
-                  min="5" max="500"
-                />
-              </Form.Group>
-            </Col>
-          </Row>
-        );
-      
-      case 'rsi_strategy':
-        return (
-          <Row>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>RSI 기간</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.rsi_period || 14}
-                  onChange={(e) => updateStrategyParam('rsi_period', parseInt(e.target.value))}
-                  min="2" max="50"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>과매수 기준</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.rsi_upper || 70}
-                  onChange={(e) => updateStrategyParam('rsi_upper', parseInt(e.target.value))}
-                  min="50" max="90"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>과매도 기준</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.rsi_lower || 30}
-                  onChange={(e) => updateStrategyParam('rsi_lower', parseInt(e.target.value))}
-                  min="10" max="50"
-                />
-              </Form.Group>
-            </Col>
-          </Row>
-        );
+    const config = strategyConfigs[selectedStrategy as keyof typeof strategyConfigs];
+    if (!config || !config.parameters) return null;
 
-      case 'bollinger_bands':
-        return (
+    return (
+      <Row className="mb-4">
+        <Col>
+          <h5>전략 파라미터</h5>
           <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>이동평균 기간</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.period || 20}
-                  onChange={(e) => updateStrategyParam('period', parseInt(e.target.value))}
-                  min="5" max="100"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>표준편차 배수</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.std_dev || 2.0}
-                  onChange={(e) => updateStrategyParam('std_dev', parseFloat(e.target.value))}
-                  step="0.1" min="0.5" max="5.0"
-                />
-              </Form.Group>
-            </Col>
+            {Object.entries(config.parameters).map(([key, paramConfig]) => {
+              const param = paramConfig as any;
+              return (
+                <Col md={6} key={key}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>
+                      {key === 'short_window' ? '단기 이동평균 기간' :
+                       key === 'long_window' ? '장기 이동평균 기간' :
+                       key === 'rsi_period' ? 'RSI 기간' :
+                       key === 'rsi_oversold' ? 'RSI 과매도 기준' :
+                       key === 'rsi_overbought' ? 'RSI 과매수 기준' : key}
+                    </Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={strategyParams[key] || param.default}
+                      onChange={(e) => updateStrategyParam(key, e.target.value)}
+                      min={param.min}
+                      max={param.max}
+                    />
+                    <Form.Text className="text-muted">
+                      기본값: {param.default}, 범위: {param.min} - {param.max}
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+              );
+            })}
           </Row>
-        );
-
-      case 'macd_strategy':
-        return (
-          <Row>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>빠른 EMA 기간</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.fast_period || 12}
-                  onChange={(e) => updateStrategyParam('fast_period', parseInt(e.target.value))}
-                  min="5" max="50"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>느린 EMA 기간</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.slow_period || 26}
-                  onChange={(e) => updateStrategyParam('slow_period', parseInt(e.target.value))}
-                  min="10" max="100"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>시그널 기간</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={params.signal_period || 9}
-                  onChange={(e) => updateStrategyParam('signal_period', parseInt(e.target.value))}
-                  min="5" max="50"
-                />
-              </Form.Group>
-            </Col>
-          </Row>
-        );
-
-      default:
-        return null;
-    }
+        </Col>
+      </Row>
+    );
   };
 
   const totalWeight = portfolio.reduce((sum, stock) => sum + stock.weight, 0);
@@ -319,7 +232,8 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
     <Container>
       <Card>
         <Card.Header>
-          <h4>📈 백테스트 실행</h4>
+          <h4> 포트폴리오 백테스트</h4>
+          <p className="mb-0 text-muted">하나 이상의 종목으로 구성된 포트폴리오 백테스트를 실행합니다.</p>
         </Card.Header>
         <Card.Body>
           {errors.length > 0 && (
@@ -333,34 +247,16 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
           )}
 
           <Form onSubmit={handleSubmit}>
-            {/* 포트폴리오 유형 선택 */}
-            <Row className="mb-4">
-              <Col>
-                <Tabs activeKey={activeTab} onSelect={(k) => setActiveTab(k as 'single' | 'portfolio')}>
-                  <Tab eventKey="single" title="📊 단일 종목">
-                    <div className="mt-3">
-                      <p className="text-muted">하나의 종목에 대한 백테스트를 실행합니다.</p>
-                    </div>
-                  </Tab>
-                  <Tab eventKey="portfolio" title="📈 포트폴리오">
-                    <div className="mt-3">
-                      <p className="text-muted">여러 종목으로 구성된 포트폴리오 백테스트를 실행합니다.</p>
-                    </div>
-                  </Tab>
-                </Tabs>
-              </Col>
-            </Row>
-
             {/* 포트폴리오 구성 */}
             <Row className="mb-4">
               <Col>
-                <h5>{activeTab === 'single' ? '종목 선택' : '포트폴리오 구성'}</h5>
+                <h5>포트폴리오 구성</h5>
                 <Table striped bordered hover>
                   <thead>
                     <tr>
                       <th>종목 심볼</th>
-                      {activeTab === 'portfolio' && <th>가중치</th>}
-                      {activeTab === 'portfolio' && <th>비중 (%)</th>}
+                      {portfolio.length > 1 && <th>가중치</th>}
+                      {portfolio.length > 1 && <th>비중 (%)</th>}
                       <th>작업</th>
                     </tr>
                   </thead>
@@ -376,7 +272,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
                             maxLength={10}
                           />
                         </td>
-                        {activeTab === 'portfolio' && (
+                        {portfolio.length > 1 && (
                           <td>
                             <Form.Control
                               type="number"
@@ -388,7 +284,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
                             />
                           </td>
                         )}
-                        {activeTab === 'portfolio' && (
+                        {portfolio.length > 1 && (
                           <td>{(stock.weight * 100).toFixed(1)}%</td>
                         )}
                         <td>
@@ -404,7 +300,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
                       </tr>
                     ))}
                   </tbody>
-                  {activeTab === 'portfolio' && (
+                  {portfolio.length > 1 && (
                     <tfoot>
                       <tr>
                         <th>합계</th>
@@ -412,34 +308,20 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
                         <th>{(totalWeight * 100).toFixed(1)}%</th>
                         <th>
                           {Math.abs(totalWeight - 1.0) > 0.001 && (
-                            <Button
-                              variant="outline-warning"
-                              size="sm"
-                              onClick={normalizeWeights}
-                            >
-                              정규화
-                            </Button>
+                            <span className="text-warning"> 합계 불일치</span>
                           )}
                         </th>
                       </tr>
                     </tfoot>
                   )}
                 </Table>
-                
+
                 <div className="d-flex gap-2 mb-3">
-                  <Button 
-                    variant="outline-primary" 
-                    onClick={addStock}
-                    disabled={portfolio.length >= 10}
-                  >
-                    종목 추가
+                  <Button variant="outline-primary" onClick={addStock} disabled={portfolio.length >= 10}>
+                    + 종목 추가
                   </Button>
-                  {activeTab === 'portfolio' && (
-                    <Button
-                      variant="outline-secondary"
-                      onClick={normalizeWeights}
-                      disabled={totalWeight === 0}
-                    >
+                  {portfolio.length > 1 && (
+                    <Button variant="outline-secondary" onClick={normalizeWeights}>
                       가중치 정규화
                     </Button>
                   )}
@@ -447,16 +329,15 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
               </Col>
             </Row>
 
-            {/* 기간 및 자본금 설정 */}
+            {/* 백테스트 설정 */}
             <Row className="mb-4">
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>시작 날짜</Form.Label>
                   <Form.Control
                     type="date"
-                    value={formData.start_date}
-                    onChange={(e) => setFormData({...formData, start_date: e.target.value})}
-                    required
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
                   />
                 </Form.Group>
               </Col>
@@ -465,90 +346,58 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, isL
                   <Form.Label>종료 날짜</Form.Label>
                   <Form.Control
                     type="date"
-                    value={formData.end_date}
-                    onChange={(e) => setFormData({...formData, end_date: e.target.value})}
-                    required
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
                   />
                 </Form.Group>
               </Col>
             </Row>
 
             <Row className="mb-4">
-              <Col md={4}>
+              <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>초기 자본금 ($)</Form.Label>
+                  <Form.Label>초기 자본</Form.Label>
                   <Form.Control
                     type="number"
-                    value={formData.cash}
-                    onChange={(e) => setFormData({...formData, cash: Number(e.target.value)})}
-                    min="1"
-                    required
+                    value={initialCapital}
+                    onChange={(e) => setInitialCapital(Number(e.target.value))}
+                    min="1000"
+                    step="1000"
                   />
                 </Form.Group>
               </Col>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>수수료율</Form.Label>
-                  <Form.Control
-                    type="number"
-                    value={formData.commission}
-                    onChange={(e) => setFormData({...formData, commission: Number(e.target.value)})}
-                    step="0.001"
-                    min="0"
-                    max="0.1"
-                    required
-                  />
-                </Form.Group>
-              </Col>
-              {activeTab === 'portfolio' && (
-                <Col md={4}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>리밸런싱 주기</Form.Label>
-                    <Form.Select
-                      value={formData.rebalance_frequency}
-                      onChange={(e) => setFormData({...formData, rebalance_frequency: e.target.value})}
-                    >
-                      <option value="monthly">월간</option>
-                      <option value="quarterly">분기</option>
-                      <option value="yearly">연간</option>
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-              )}
-            </Row>
-
-            {/* 전략 설정 */}
-            <Row className="mb-4">
-              <Col>
-                <h5>📋 전략 설정</h5>
+              <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>투자 전략</Form.Label>
                   <Form.Select
-                    value={formData.strategy}
-                    onChange={(e) => setFormData({...formData, strategy: e.target.value})}
+                    value={selectedStrategy}
+                    onChange={(e) => setSelectedStrategy(e.target.value)}
                   >
-                    <option value="buy_and_hold">📈 Buy & Hold</option>
-                    <option value="sma_crossover">📊 SMA Crossover</option>
-                    <option value="rsi_strategy">📉 RSI Strategy</option>
-                    <option value="bollinger_bands">📏 Bollinger Bands</option>
-                    <option value="macd_strategy">🌊 MACD Strategy</option>
+                    <option value="buy_and_hold">매수 후 보유</option>
+                    <option value="sma_crossover">단순이동평균 교차</option>
+                    <option value="rsi_strategy">RSI 전략</option>
                   </Form.Select>
                 </Form.Group>
-                
-                {renderStrategyParams()}
               </Col>
             </Row>
 
-            <div className="d-grid">
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                disabled={isLoading || errors.length > 0}
-              >
-                {isLoading ? '백테스트 실행 중...' : '🚀 백테스트 실행'}
-              </Button>
-            </div>
+            {/* 전략 파라미터 */}
+            {renderStrategyParams()}
+
+            {/* 실행 버튼 */}
+            <Row>
+              <Col>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  disabled={loading || isLoading}
+                  className="w-100"
+                >
+                  {loading || isLoading ? '백테스트 실행 중...' : '백테스트 실행'}
+                </Button>
+              </Col>
+            </Row>
           </Form>
         </Card.Body>
       </Card>

@@ -51,7 +51,7 @@ class PortfolioBacktestRequest(BaseModel):
     portfolio: List[PortfolioWeight] = Field(..., min_items=1, max_items=10, description="포트폴리오 구성")
     start_date: str = Field(..., description="시작 날짜 (YYYY-MM-DD)")
     end_date: str = Field(..., description="종료 날짜 (YYYY-MM-DD)")
-    cash: float = Field(10000, gt=0, description="초기 자본금")
+    initial_capital: float = Field(10000, gt=0, description="초기 자본금")
     commission: float = Field(0.002, ge=0, lt=0.1, description="수수료율 (0 ~ 0.1)")
     rebalance_frequency: str = Field("monthly", description="리밸런싱 주기 (monthly, quarterly, yearly)")
     strategy: str = Field("buy_and_hold", description="전략명")
