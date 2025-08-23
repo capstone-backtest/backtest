@@ -15,6 +15,46 @@ from app.utils.serializers import recursive_serialize
 
 logger = logging.getLogger(__name__)
 
+# 상수 정의
+DEFAULT_DCA_PERIODS = 12
+MAX_PORTFOLIO_ITEMS = 10
+DEFAULT_COMMISSION = 0.002
+
+
+class DCACalculator:
+    """분할 매수(DCA) 계산 유틸리티"""
+    
+    @staticmethod
+    def calculate_dca_shares_and_return(df: pd.DataFrame, monthly_amount: float, 
+                                      dca_periods: int, start_date: str) -> Tuple[float, float, float]:
+        """
+        DCA 투자의 총 주식 수량과 평균 단가, 수익률을 계산
+        
+        Returns:
+            (total_shares, average_price, return_rate)
+        """
+        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+        total_shares = 0
+        total_invested = 0
+        
+        for month in range(dca_periods):
+            investment_date = start_date_obj + timedelta(days=30 * month)
+            month_price_data = df[df.index.date >= investment_date.date()]
+            
+            if not month_price_data.empty:
+                month_price = month_price_data['Close'].iloc[0]
+                shares_bought = monthly_amount / month_price
+                total_shares += shares_bought
+                total_invested += monthly_amount
+        
+        if total_shares > 0:
+            average_price = total_invested / total_shares
+            end_price = df['Close'].iloc[-1]
+            return_rate = (end_price / average_price - 1) * 100
+            return total_shares, average_price, return_rate
+        
+        return 0, 0, 0
+
 
 class PortfolioBacktestService:
     """포트폴리오 백테스트 서비스"""
@@ -42,9 +82,6 @@ class PortfolioBacktestService:
         Returns:
             포트폴리오 가치와 수익률이 포함된 DataFrame
         """
-        from datetime import datetime, timedelta
-        import pandas as pd
-        
         # 현금 처리: CASH 심볼은 수익률 0%로 처리
         cash_amount = amounts.get('CASH', 0)
         stock_amounts = {k: v for k, v in amounts.items() if k != 'CASH'}
@@ -927,38 +964,15 @@ class PortfolioBacktestService:
                             }
                             
                         else:  # DCA
-                            # 분할매수: 실제 매수한 주식의 평균 단가 대비 종료가로 수익률 계산
+                            # 분할매수: DCACalculator를 사용하여 수익률 계산
                             dca_periods = dca_info[unique_key]['dca_periods']
                             monthly_amount = dca_info[unique_key]['monthly_amount']
                             
-                            # DCA 수익률 계산을 위한 시뮬레이션
-                            from datetime import datetime, timedelta
-                            start_date_obj = datetime.strptime(request.start_date, '%Y-%m-%d')
+                            total_shares, average_price, individual_return = DCACalculator.calculate_dca_shares_and_return(
+                                df, monthly_amount, dca_periods, request.start_date
+                            )
                             
-                            total_shares = 0
-                            total_invested = 0
-                            
-                            for month in range(dca_periods):
-                                # 각 월의 첫 거래일 가격으로 매수
-                                investment_date = start_date_obj + timedelta(days=30 * month)
-                                
-                                # 해당 날짜 이후의 첫 거래일 찾기
-                                month_price_data = df[df.index.date >= investment_date.date()]
-                                
-                                if not month_price_data.empty:
-                                    month_price = month_price_data['Close'].iloc[0]
-                                    shares_bought = monthly_amount / month_price
-                                    total_shares += shares_bought
-                                    total_invested += monthly_amount
-                            
-                            if total_shares > 0:
-                                average_price = total_invested / total_shares  # 평균 매수 단가
-                                end_price = df['Close'].iloc[-1]
-                                individual_return = (end_price / average_price - 1) * 100
-                            else:
-                                average_price = 0
-                                end_price = df['Close'].iloc[-1]
-                                individual_return = 0
+                            end_price = df['Close'].iloc[-1]
                             
                             individual_returns[unique_key] = {
                                 'symbol': symbol,
