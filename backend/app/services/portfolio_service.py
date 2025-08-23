@@ -98,7 +98,6 @@ class PortfolioBacktestService:
         # 현금만 있는 경우 처리
         if not all_dates and cash_amount > 0:
             # 기본 날짜 범위 생성 (1일)
-            from datetime import datetime
             today = datetime.now().date()
             date_range = pd.DatetimeIndex([today])
         else:
