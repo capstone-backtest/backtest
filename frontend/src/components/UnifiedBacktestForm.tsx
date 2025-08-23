@@ -425,7 +425,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                     onChange={(e) => setCommission(Number(e.target.value))}
                     min="0"
                     max="5"
-                    step="0.1"
+                    step="0.001"
                   />
                   <Form.Text className="text-muted">
                     기본값: 0.2% (거래당)
