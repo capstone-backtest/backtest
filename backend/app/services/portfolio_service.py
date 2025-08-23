@@ -896,24 +896,32 @@ class PortfolioBacktestService:
                     'investment_type': 'lump_sum'
                 }
             
-            # 주식 수익률 추가
-            for symbol, df in portfolio_data.items():
-                if len(df) > 0:
-                    start_price = df['Close'].iloc[0]
-                    end_price = df['Close'].iloc[-1]
-                    individual_return = (end_price / start_price - 1) * 100
-                    weight = amounts[symbol] / total_amount
-                    investment_type = dca_info[symbol]['investment_type']
+            # 주식 수익률 추가 (중복 종목 지원)
+            for unique_key, amount in amounts.items():
+                if unique_key.endswith('_CASH') or unique_key.split('_')[0] == 'CASH':
+                    continue
                     
-                    individual_returns[symbol] = {
-                        'weight': weight,
-                        'amount': amounts[symbol],
-                        'return': individual_return,
-                        'start_price': start_price,
-                        'end_price': end_price,
-                        'investment_type': investment_type,
-                        'dca_periods': dca_info[symbol]['dca_periods'] if investment_type == 'dca' else None
-                    }
+                symbol = dca_info[unique_key]['symbol']
+                
+                if symbol in portfolio_data:
+                    df = portfolio_data[symbol]
+                    if len(df) > 0:
+                        start_price = df['Close'].iloc[0]
+                        end_price = df['Close'].iloc[-1]
+                        individual_return = (end_price / start_price - 1) * 100
+                        weight = amount / total_amount
+                        investment_type = dca_info[unique_key]['investment_type']
+                        
+                        individual_returns[unique_key] = {
+                            'symbol': symbol,
+                            'weight': weight,
+                            'amount': amount,
+                            'return': individual_return,
+                            'start_price': start_price,
+                            'end_price': end_price,
+                            'investment_type': investment_type,
+                            'dca_periods': dca_info[unique_key]['dca_periods'] if investment_type == 'dca' else None
+                        }
             
             # 결과 포맷팅
             result = {
