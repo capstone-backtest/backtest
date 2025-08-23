@@ -22,7 +22,7 @@
 
 ```
 backtest/
-├── .github/                   # GitHub 설정 및 Copilot 지침
+├── .github/                   # GitHub 설정 및 Copilot 지침, 개발 계획 및 할일
 ├── backend/                   # FastAPI 백엔드 API 서버
 │   ├── app/                  # 애플리케이션 코드
 │   │   ├── api/v1/          # API 엔드포인트
@@ -41,8 +41,7 @@ backtest/
 ├── database/              # 데이터베이스 관련 파일
 ├── nginx/                 # Nginx 설정
 ├── docker-compose*.yml    # Docker 설정
-├── README.md             # 프로젝트 메인 문서
-└── TODO.md               # 개발 계획 및 할일
+└── README.md             # 프로젝트 메인 문서
 ```
 
 ## 빠른 시작
