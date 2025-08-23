@@ -9,6 +9,14 @@ from ....services.backtest_service import backtest_service
 from ....services.portfolio_service import PortfolioBacktestService
 from ....services.yfinance_db import load_ticker_data
 from ....utils.data_fetcher import data_fetcher
+from ....core.custom_exceptions import (
+    DataNotFoundError, 
+    InvalidSymbolError, 
+    YFinanceRateLimitError,
+    ValidationError
+)
+from ....utils.user_messages import get_user_friendly_message, log_error_for_debugging
+import traceback
 import logging
 
 logger = logging.getLogger(__name__)
@@ -201,7 +209,7 @@ async def run_portfolio_backtest(request: PortfolioBacktestRequest):
     """
     포트폴리오 백테스트 실행 API
     
-    - **portfolio**: 포트폴리오 구성 (종목과 비중)
+    - **portfolio**: 포트폴리오 구성 (종목과 비중/금액)
     - **start_date**: 백테스트 시작 날짜 (YYYY-MM-DD)
     - **end_date**: 백테스트 종료 날짜 (YYYY-MM-DD)
     - **cash**: 초기 투자금액
@@ -212,42 +220,63 @@ async def run_portfolio_backtest(request: PortfolioBacktestRequest):
     ```json
     {
         "portfolio": [
-            {"symbol": "AAPL", "weight": 0.4},
-            {"symbol": "GOOGL", "weight": 0.3},
-            {"symbol": "MSFT", "weight": 0.3}
+            {"symbol": "AAPL", "amount": 4000, "investment_type": "lump_sum"},
+            {"symbol": "GOOGL", "amount": 3000, "investment_type": "dca", "dca_periods": 12},
+            {"symbol": "MSFT", "amount": 3000, "investment_type": "lump_sum"}
         ],
         "start_date": "2023-01-01",
         "end_date": "2023-12-31",
-        "cash": 10000,
         "commission": 0.002,
         "rebalance_frequency": "monthly"
     }
     ```
     """
     try:
+        # 입력 검증
+        if not request.portfolio or len(request.portfolio) == 0:
+            raise ValidationError("포트폴리오가 비어있습니다. 최소 1개 종목을 추가해주세요.")
+        
+        if len(request.portfolio) > 10:
+            raise ValidationError("포트폴리오는 최대 10개 종목까지 포함할 수 있습니다.")
+        
         # 포트폴리오 백테스트 실행
         result = await portfolio_service.run_portfolio_backtest(request)
         
-        if result['status'] == 'error':
+        if result.get('status') == 'error':
+            # 서비스에서 반환된 에러 처리
+            error_message = result.get('error', '알 수 없는 오류가 발생했습니다.')
+            user_message = get_user_friendly_message("portfolio_backtest_error", error_message)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result['error']
+                detail=user_message
             )
         
         logger.info(f"포트폴리오 백테스트 API 완료: {len(request.portfolio)} 종목")
         return result
         
+    except (DataNotFoundError, InvalidSymbolError, YFinanceRateLimitError, ValidationError) as e:
+        # 사용자 친화적 오류 처리
+        user_message = get_user_friendly_message(type(e).__name__, str(e))
+        logger.warning(f"User error in portfolio backtest: {user_message}")
+        raise HTTPException(status_code=400, detail=user_message)
+        
     except HTTPException:
+        # 이미 처리된 HTTP 예외는 재발생
         raise
-    except ValueError as e:
-        logger.error(f"포트폴리오 백테스트 요청 오류: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        
     except Exception as e:
-        logger.error(f"포트폴리오 백테스트 실행 오류: {str(e)}")
+        # 예상하지 못한 오류 처리
+        error_id = log_error_for_debugging(e, "portfolio_backtest", {
+            "portfolio_size": len(request.portfolio) if request.portfolio else 0,
+            "strategy": getattr(request, 'strategy', 'buy_and_hold'),
+            "date_range": f"{request.start_date} to {request.end_date}"
+        })
+        
+        logger.error(f"Unexpected error in portfolio backtest [ID: {error_id}]: {str(e)}")
+        logger.debug(traceback.format_exc())
+        
+        user_message = get_user_friendly_message("unexpected_error", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="포트폴리오 백테스트 실행 중 오류가 발생했습니다."
+            detail=f"{user_message} (오류 ID: {error_id})"
         ) 
