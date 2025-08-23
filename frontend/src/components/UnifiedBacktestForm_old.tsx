@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Form, Row, Col, Button, Table, Card, Container, Alert } from 'react-bootstrap';
 import { UnifiedBacktestRequest } from '../types/api';
 
 interface Stock {
   symbol: string;
-  amount: number;
+  amount: number;  // weight에서 amount로 변경
 }
 
 interface UnifiedBacktestFormProps {
@@ -158,6 +158,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
     }
 
     try {
+      try {
       // 포트폴리오 데이터 준비
       const portfolioData = portfolio.map(stock => ({
         symbol: stock.symbol.toUpperCase(),

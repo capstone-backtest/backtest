@@ -13,6 +13,8 @@ export interface UnifiedBacktestRequest {
   end_date: string;
   strategy: string;
   strategy_params?: Record<string, any>;
+  commission?: number;
+  rebalance_frequency?: string;
 }
 
 export interface ChartDataPoint {

@@ -44,8 +44,8 @@ function App() {
           portfolio: request.portfolio,
           start_date: request.start_date,
           end_date: request.end_date,
-          commission: 0.002,  // 기본 수수료
-          rebalance_frequency: 'monthly',  // 기본 리밸런싱 주기
+          commission: request.commission || 0.002,  // 사용자 설정 또는 기본 수수료
+          rebalance_frequency: request.rebalance_frequency || 'monthly',  // 사용자 설정 또는 기본 리밸런싱
           strategy: request.strategy,
           strategy_params: request.strategy_params || {}
         };
