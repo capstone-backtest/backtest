@@ -87,13 +87,19 @@ class PortfolioBacktestService:
                 
             current_portfolio_value = cash_amount  # 현금부터 시작
             
-            # 각 주식 종목의 현재 가치 계산
-            for symbol, df in portfolio_data.items():
-                if symbol == 'CASH':
+            # 각 포트폴리오 항목의 현재 가치 계산 (중복 종목 지원)
+            for unique_key, amount in amounts.items():
+                if unique_key.endswith('_CASH') or unique_key.split('_')[0] == 'CASH':
                     continue
                     
-                info = dca_info[symbol]
+                symbol = dca_info[unique_key]['symbol']
+                info = dca_info[unique_key]
                 investment_type = info['investment_type']
+                
+                if symbol not in portfolio_data:
+                    continue
+                    
+                df = portfolio_data[symbol]
                 
                 try:
                     # 해당 날짜의 가격 찾기
@@ -108,13 +114,13 @@ class PortfolioBacktestService:
                         if current_date.date() == start_date_obj.date():
                             # 시작 가격으로 주식 수량 계산
                             start_price = price_data['Close'].iloc[0] if not price_data.empty else current_price
-                            shares = amounts[symbol] / start_price
+                            shares = amount / start_price
                         else:
                             # 이전에 계산된 주식 수량 유지 (간단히 첫날 기준으로 계산)
                             first_price_data = df[df.index.date >= start_date_obj.date()]
                             if not first_price_data.empty:
                                 start_price = first_price_data['Close'].iloc[0]
-                                shares = amounts[symbol] / start_price
+                                shares = amount / start_price
                             else:
                                 shares = 0
                         
@@ -146,7 +152,7 @@ class PortfolioBacktestService:
                     current_portfolio_value += stock_value
                     
                 except Exception as e:
-                    logger.warning(f"종목 {symbol} 가치 계산 오류 ({current_date}): {e}")
+                    logger.warning(f"포트폴리오 항목 {unique_key} (종목: {symbol}) 가치 계산 오류 ({current_date}): {e}")
                     continue
             
             # 일일 수익률 계산
@@ -176,6 +182,9 @@ class PortfolioBacktestService:
         result.set_index('Date', inplace=True)
         
         return result
+
+    @staticmethod
+    def calculate_portfolio_returns(
         portfolio_data: Dict[str, pd.DataFrame],
         amounts: Dict[str, float],
         rebalance_frequency: str = "monthly"
@@ -258,20 +267,88 @@ class PortfolioBacktestService:
 
     @staticmethod
     def calculate_portfolio_returns(
+        portfolio_data: Dict[str, pd.DataFrame],
+        amounts: Dict[str, float],
+        rebalance_frequency: str = "monthly"
+    ) -> pd.DataFrame:
         """
-        포트폴리오 통계 계산
+        포트폴리오 수익률을 계산합니다.
         
         Args:
-            portfolio_data: 포트폴리오 가치 데이터
-            total_amount: 총 투자 금액
+            portfolio_data: 각 종목의 가격 데이터 {symbol: DataFrame}
+            amounts: 각 종목의 투자 금액 {symbol: amount}
+            rebalance_frequency: 리밸런싱 주기
             
         Returns:
-            포트폴리오 통계 딕셔너리
+            포트폴리오 가치와 수익률이 포함된 DataFrame
         """
-        if len(portfolio_data) == 0:
-            raise ValueError("포트폴리오 데이터가 없습니다.")
+        # 현금 처리: CASH 심볼은 수익률 0%로 처리
+        cash_amount = amounts.get('CASH', 0)
+        stock_amounts = {k: v for k, v in amounts.items() if k != 'CASH'}
         
-        # 기본 통계
+        # 모든 주식 종목의 날짜 범위를 통합
+        all_dates = set()
+        for symbol, df in portfolio_data.items():
+            if symbol != 'CASH':  # 현금 제외
+                all_dates.update(df.index)
+        
+        if not all_dates and cash_amount == 0:
+            raise ValueError("유효한 데이터가 없습니다.")
+        
+        # 현금만 있는 경우 처리
+        if not all_dates and cash_amount > 0:
+            # 기본 날짜 범위 생성 (1일)
+            from datetime import datetime
+            today = datetime.now().date()
+            date_range = pd.DatetimeIndex([today])
+        else:
+            date_range = pd.DatetimeIndex(sorted(all_dates))
+        
+        # 총 투자 금액 계산
+        total_amount = sum(amounts.values())
+        
+        # 각 종목의 수익률 계산
+        returns_data = {}
+        for symbol, df in portfolio_data.items():
+            if symbol == 'CASH':
+                continue  # 현금은 별도 처리
+            if len(df) == 0:
+                continue
+            # 종목별 일일 수익률 계산
+            daily_returns = df['Close'].pct_change().fillna(0)
+            returns_data[symbol] = daily_returns.reindex(date_range, fill_value=0)
+        
+        # 현금 수익률 추가 (항상 0%)
+        if cash_amount > 0:
+            returns_data['CASH'] = pd.Series(0.0, index=date_range)
+        
+        if not returns_data:
+            raise ValueError("유효한 데이터가 없습니다.")
+        
+        # 포트폴리오 수익률 계산 (투자 금액 기준 가중 평균)
+        portfolio_returns = pd.Series(0.0, index=date_range)
+        
+        for symbol, amount in amounts.items():
+            if symbol in returns_data:
+                weight = amount / total_amount  # 투자 금액 비율로 가중치 계산
+                portfolio_returns += returns_data[symbol] * weight
+        
+        # 누적 가치 계산 (1부터 시작)
+        portfolio_value = (1 + portfolio_returns).cumprod()
+        
+        # 결과 DataFrame 생성
+        result = pd.DataFrame({
+            'Date': date_range,
+            'Portfolio_Value': portfolio_value,
+            'Daily_Return': portfolio_returns,
+            'Cumulative_Return': (portfolio_value - 1) * 100
+        })
+        result.set_index('Date', inplace=True)
+        
+        return result
+    
+    @staticmethod
+    def calculate_portfolio_statistics(portfolio_data: pd.DataFrame, total_amount: float) -> Dict[str, Any]:
         start_date = portfolio_data.index[0]
         end_date = portfolio_data.index[-1]
         duration = (end_date - start_date).days
@@ -476,17 +553,21 @@ class PortfolioBacktestService:
             
             logger.info(f"전략 기반 백테스트: {request.strategy}, 총 투자금액: ${total_amount:,.2f}")
             
-            # 각 종목별로 전략 백테스트 실행
-            for item in request.portfolio:
+            # 각 종목별로 전략 백테스트 실행 (중복 종목 지원)
+            for idx, item in enumerate(request.portfolio):
                 symbol = item.symbol
                 amount = item.amount
                 weight = amount / total_amount  # 가중치는 투자 금액 비율로 계산
+                
+                # 중복 종목을 위한 고유 키 생성
+                unique_key = f"{symbol}_{idx}"
                 
                 # 현금 처리 (수익률 0%, 전략 적용 안함)
                 if symbol == 'CASH':
                     logger.info(f"현금 {symbol} 처리 (투자금액: ${amount:,.2f}, 비중: {weight:.3f})")
                     
-                    portfolio_results[symbol] = {
+                    portfolio_results[unique_key] = {
+                        'symbol': symbol,
                         'initial_value': amount,
                         'final_value': amount,  # 현금은 변동 없음
                         'return_pct': 0.0,  # 현금 수익률 0%
@@ -501,7 +582,8 @@ class PortfolioBacktestService:
                         }
                     }
                     
-                    individual_returns[symbol] = {
+                    individual_returns[unique_key] = {
+                        'symbol': symbol,
                         'weight': weight,
                         'amount': amount,
                         'return': 0.0,
@@ -515,7 +597,7 @@ class PortfolioBacktestService:
                     logger.info(f"현금 {symbol} 완료: 0.00% 수익률")
                     continue
                 
-                logger.info(f"종목 {symbol} 전략 백테스트 실행 (투자금액: ${amount:,.2f}, 비중: {weight:.3f})")
+                logger.info(f"종목 {symbol} (#{idx+1}) 전략 백테스트 실행 (투자금액: ${amount:,.2f}, 비중: {weight:.3f})")
                 
                 # 개별 종목 백테스트 요청 생성
                 backtest_req = BacktestRequest(
@@ -536,7 +618,8 @@ class PortfolioBacktestService:
                         initial_value = amount
                         stock_return = (final_value / initial_value - 1) * 100
                         
-                        portfolio_results[symbol] = {
+                        portfolio_results[unique_key] = {
+                            'symbol': symbol,
                             'initial_value': initial_value,
                             'final_value': final_value,
                             'return_pct': stock_return,
@@ -545,7 +628,8 @@ class PortfolioBacktestService:
                             'strategy_stats': result.__dict__  # 객체를 딕셔너리로 변환
                         }
                         
-                        individual_returns[symbol] = {
+                        individual_returns[unique_key] = {
+                            'symbol': symbol,
                             'weight': weight,
                             'amount': amount,
                             'return': stock_return,
@@ -557,7 +641,7 @@ class PortfolioBacktestService:
                         
                         total_portfolio_value += final_value
                         
-                        logger.info(f"종목 {symbol} 완료: {stock_return:.2f}% 수익률, 거래수: {getattr(result, 'total_trades', 0)}")
+                        logger.info(f"종목 {symbol} (#{idx+1}) 완료: {stock_return:.2f}% 수익률, 거래수: {getattr(result, 'total_trades', 0)}")
                     else:
                         logger.warning(f"종목 {symbol} 백테스트 실패: 결과가 없거나 final_equity 속성이 없음")
                         
@@ -664,23 +748,27 @@ class PortfolioBacktestService:
         현금(CASH)과 주식을 함께 처리, 분할 매수(DCA) 지원
         """
         try:
-            # 각 종목의 데이터 수집
+            # 각 종목의 데이터 수집 (중복 종목 지원)
             portfolio_data = {}
             amounts = {}
             total_amount = sum(item.amount for item in request.portfolio)
             cash_amount = 0
             
-            # 분할 매수 정보 수집
+            # 분할 매수 정보 수집 (중복 종목 지원)
             dca_info = {}
             
-            for item in request.portfolio:
+            for idx, item in enumerate(request.portfolio):
                 symbol = item.symbol
                 amount = item.amount
                 investment_type = getattr(item, 'investment_type', 'lump_sum')
                 dca_periods = getattr(item, 'dca_periods', 12)
                 
+                # 중복 종목을 위한 고유 키 생성
+                unique_key = f"{symbol}_{idx}"
+                
                 # 분할 매수 정보 저장
-                dca_info[symbol] = {
+                dca_info[unique_key] = {
+                    'symbol': symbol,
                     'investment_type': investment_type,
                     'dca_periods': dca_periods,
                     'monthly_amount': amount / dca_periods if investment_type == 'dca' else amount
@@ -688,27 +776,28 @@ class PortfolioBacktestService:
                 
                 if symbol == 'CASH':
                     # 현금 처리
-                    cash_amount = amount
-                    amounts[symbol] = amount
-                    logger.info(f"현금 {symbol} 추가 (금액: ${amount:,.2f})")
+                    cash_amount += amount  # 중복 현금은 합산
+                    amounts[unique_key] = amount
+                    logger.info(f"현금 {symbol} (#{idx+1}) 추가 (금액: ${amount:,.2f})")
                     continue
                 
-                logger.info(f"종목 {symbol} 데이터 로드 중 (투자금액: ${amount:,.2f}, 방식: {investment_type})")
+                logger.info(f"종목 {symbol} (#{idx+1}) 데이터 로드 중 (투자금액: ${amount:,.2f}, 방식: {investment_type})")
                 
                 if investment_type == 'dca':
                     logger.info(f"분할 매수: ${amount:,.2f}을 {dca_periods}개월에 걸쳐 매달 ${amount/dca_periods:,.2f}씩")
                 
-                # DB에서 데이터 로드
-                df = load_ticker_data(symbol, request.start_date, request.end_date)
+                # DB에서 데이터 로드 (동일 종목은 한 번만 로드)
+                if symbol not in portfolio_data:
+                    df = load_ticker_data(symbol, request.start_date, request.end_date)
+                    
+                    if df is None or df.empty:
+                        logger.warning(f"종목 {symbol}의 데이터가 없습니다.")
+                        continue
+                    
+                    portfolio_data[symbol] = df
+                    logger.info(f"종목 {symbol} 데이터 로드 완료: {len(df)} 행")
                 
-                if df is None or df.empty:
-                    logger.warning(f"종목 {symbol}의 데이터가 없습니다.")
-                    continue
-                
-                portfolio_data[symbol] = df
-                amounts[symbol] = amount
-                
-                logger.info(f"종목 {symbol} 데이터 로드 완료: {len(df)} 행")
+                amounts[unique_key] = amount
             
             # 현금만 있는 경우 처리
             if not portfolio_data and cash_amount > 0:

@@ -74,15 +74,6 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
       validationErrors.push('포트폴리오는 최대 10개 종목까지 포함할 수 있습니다.');
     }
 
-    // 심볼 중복 검사 (CUSTOM 제외)
-    const validSymbols = portfolio
-      .filter(stock => stock.symbol && stock.symbol !== 'CUSTOM')
-      .map(stock => stock.symbol.toUpperCase());
-    const uniqueSymbols = new Set(validSymbols);
-    if (validSymbols.length !== uniqueSymbols.size) {
-      validationErrors.push('중복된 종목이 있습니다.');
-    }
-
     // 빈 심볼 검사 (CUSTOM 선택 후 미입력 제외)
     const emptySymbols = portfolio.filter(stock => !stock.symbol.trim() || stock.symbol === 'CUSTOM');
     if (emptySymbols.length > 0) {
@@ -282,7 +273,9 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                     💡 <strong>현금(CASH)</strong>을 포함하여 포트폴리오를 구성할 수 있습니다. 
                     예: 현금 50%, AAPL 50% - 리밸런싱 시 이 비율을 유지합니다.<br/>
                     📈 <strong>분할 매수(DCA)</strong>: 총 투자금을 여러 개월에 나눠서 투자하는 방식입니다. 
-                    예: $5,000을 12개월 → 매달 $416씩 투자
+                    예: $5,000을 12개월 → 매달 $416씩 투자<br/>
+                    🔄 <strong>중복 종목 허용</strong>: 동일 종목을 다른 투자 방식으로 여러 번 추가 가능합니다. 
+                    예: AAPL $50,000 (일시불) + AAPL $12,000 (12개월 분할매수)
                   </small>
                 </div>
                 <Table striped bordered hover>

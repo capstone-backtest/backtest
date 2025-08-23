@@ -72,11 +72,6 @@ class PortfolioBacktestRequest(BaseModel):
         if not v:
             raise ValueError('포트폴리오는 최소 1개 종목을 포함해야 합니다.')
         
-        # 심볼 중복 확인
-        symbols = [item.symbol for item in v]
-        if len(symbols) != len(set(symbols)):
-            raise ValueError('포트폴리오에 중복된 종목이 있습니다.')
-        
         # 총 투자 금액 확인
         total_amount = sum(item.amount for item in v)
         if total_amount <= 0:
