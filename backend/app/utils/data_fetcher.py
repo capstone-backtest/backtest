@@ -9,6 +9,17 @@ from typing import Optional
 import logging
 from pathlib import Path
 import os
+class DataNotFoundError(Exception):
+    """데이터를 찾을 수 없을 때 발생하는 예외"""
+    pass
+
+class InvalidSymbolError(Exception):
+    """잘못된 종목 심볼일 때 발생하는 예외"""
+    pass
+
+class YFinanceRateLimitError(Exception):
+    """Yahoo Finance API 제한에 도달했을 때 발생하는 예외"""
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +117,20 @@ class DataFetcher:
             
             # 데이터 검증
             if data is None or data.empty:
-                error_msg = f"티커 '{ticker}'에 대한 데이터를 찾을 수 없습니다. 오류: {'; '.join(error_messages)}"
-                raise ValueError(error_msg)
+                # 심볼이 유효하지 않은 경우 체크
+                if ticker.isalpha() and len(ticker) <= 10:
+                    # 유효한 형식이지만 데이터가 없는 경우
+                    error_detail = f"'{ticker}' 종목에 대한 {start_str}부터 {end_str}까지의 데이터를 찾을 수 없습니다."
+                    if error_messages:
+                        error_detail += f" 오류: {'; '.join(error_messages)}"
+                    raise DataNotFoundError(error_detail)
+                else:
+                    # 잘못된 심볼 형식
+                    raise InvalidSymbolError(f"'{ticker}'는 유효하지 않은 종목 심볼입니다.")
+            
+            # 데이터가 너무 적은 경우 체크
+            if len(data) < 2:
+                raise DataNotFoundError(f"'{ticker}' 종목의 데이터가 부족합니다. ({len(data)}개 레코드)")
             
             # MultiIndex 컬럼 처리 (yfinance는 때때로 MultiIndex를 반환)
             logger.info(f"원본 컬럼 구조: {data.columns}, 타입: {type(data.columns)}")
@@ -134,7 +157,7 @@ class DataFetcher:
                 logger.warning(f"누락된 컬럼: {missing_columns}")
                 # 누락된 컬럼이 있어도 최소한 Close가 있으면 진행
                 if 'Close' not in available_columns:
-                    raise ValueError(f"필수 컬럼 'Close'가 없습니다. 사용 가능한 컬럼: {available_columns}")
+                    raise DataNotFoundError(f"'{ticker}' 종목의 필수 데이터 'Close'가 없습니다.")
                 
                 # 누락된 컬럼을 Close 값으로 대체
                 for col in missing_columns:
@@ -153,20 +176,29 @@ class DataFetcher:
             data = data.dropna()
             
             if data.empty:
-                raise ValueError(f"유효한 데이터가 없습니다: {ticker}")
+                raise DataNotFoundError(f"'{ticker}' 종목의 유효한 데이터가 없습니다.")
             
             # 날짜 범위 확인
             if len(data) < 5:
-                logger.warning(f"데이터가 너무 적습니다: {ticker}, {len(data)} 레코드")
+                logger.warning(f"데이터가 적습니다: {ticker}, {len(data)} 레코드")
             
             # CSV 캐시 비활성화: 파일로 저장하지 않습니다.
             
             logger.info(f"데이터 수집 완료: {ticker}, {len(data)} 레코드")
             return data
             
+        except (DataNotFoundError, InvalidSymbolError) as e:
+            # 사용자 친화적 오류는 그대로 전달
+            logger.warning(f"데이터 수집 실패: {ticker}, {str(e)}")
+            raise
         except Exception as e:
-            logger.error(f"데이터 수집 실패: {ticker}, {str(e)}")
-            raise ValueError(f"데이터 수집 실패: {ticker} - {str(e)}")
+            # 기타 오류는 yfinance 관련 오류로 분류
+            error_msg = str(e).lower()
+            if any(keyword in error_msg for keyword in ['timeout', 'connection', 'network', 'rate limit']):
+                raise YFinanceRateLimitError(f"야후 파이낸스 연결 오류: {str(e)}")
+            else:
+                logger.error(f"데이터 수집 예상치 못한 오류: {ticker}, {str(e)}")
+                raise DataNotFoundError(f"'{ticker}' 종목 데이터 수집 실패: {str(e)}")
     
     def validate_ticker(self, ticker: str) -> bool:
         """
