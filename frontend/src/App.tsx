@@ -3,22 +3,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { Container, Row, Col, Alert, Spinner } from 'react-bootstrap';
 import UnifiedBacktestForm from './components/UnifiedBacktestForm';
 import UnifiedBacktestResults from './components/UnifiedBacktestResults';
-
-interface Stock {
-  symbol: string;
-  weight: number;
-}
-
-interface UnifiedBacktestRequest {
-  portfolio: Stock[];
-  start_date: string;
-  end_date: string;
-  cash: number;
-  commission: number;
-  rebalance_frequency: string;
-  strategy: string;
-  strategy_params: Record<string, any>;
-}
+import { UnifiedBacktestRequest } from './types/api';
 
 function App() {
   const [results, setResults] = useState<any>(null);
@@ -41,9 +26,9 @@ function App() {
           ticker: request.portfolio[0].symbol,
           start_date: request.start_date,
           end_date: request.end_date,
-          initial_cash: request.cash,
+          initial_cash: request.portfolio[0].amount,
           strategy: request.strategy,
-          strategy_params: request.strategy_params
+          strategy_params: request.strategy_params || {}
         };
 
         response = await fetch('http://localhost:8000/api/v1/backtest/chart-data', {
@@ -54,13 +39,23 @@ function App() {
           body: JSON.stringify(singleStockRequest),
         });
       } else {
-        // 포트폴리오 - 포트폴리오 API 사용
+        // 포트폴리오 - 포트폴리오 API 사용 (백엔드 스키마에 맞춰 요청 구성)
+        const portfolioRequest = {
+          portfolio: request.portfolio,
+          start_date: request.start_date,
+          end_date: request.end_date,
+          commission: 0.002,  // 기본 수수료
+          rebalance_frequency: 'monthly',  // 기본 리밸런싱 주기
+          strategy: request.strategy,
+          strategy_params: request.strategy_params || {}
+        };
+        
         response = await fetch('http://localhost:8000/api/v1/backtest/portfolio', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(request),
+          body: JSON.stringify(portfolioRequest),
         });
       }
 
@@ -104,7 +99,7 @@ function App() {
               <Col>
                 <UnifiedBacktestForm 
                   onSubmit={handleSubmit} 
-                  isLoading={loading} 
+                  loading={loading} 
                 />
               </Col>
             </Row>

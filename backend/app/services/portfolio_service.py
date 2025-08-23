@@ -160,6 +160,106 @@ class PortfolioBacktestService:
         
         return max_count
     
+    async def _calculate_realistic_equity_curve(self, request: PortfolioBacktestRequest, 
+                                              portfolio_results: Dict, total_amount: float) -> Tuple[Dict, Dict]:
+        """
+        실제 종목 데이터를 기반으로 포트폴리오 equity curve 계산
+        """
+        from datetime import datetime
+        import pandas as pd
+        
+        # 각 종목의 실제 가격 데이터 로드
+        portfolio_data = {}
+        for symbol in portfolio_results.keys():
+            df = load_ticker_data(symbol, request.start_date, request.end_date)
+            if df is not None and not df.empty:
+                portfolio_data[symbol] = df
+        
+        if not portfolio_data:
+            # 데이터가 없으면 기본 선형 계산으로 fallback
+            return self._fallback_equity_curve(request, portfolio_results, total_amount)
+        
+        # 모든 데이터의 공통 날짜 범위 찾기
+        all_dates = set()
+        for df in portfolio_data.values():
+            all_dates.update(df.index.strftime('%Y-%m-%d'))
+        
+        date_range = sorted(all_dates)
+        
+        equity_curve = {}
+        daily_returns = {}
+        prev_portfolio_value = total_amount
+        
+        for i, date_str in enumerate(date_range):
+            date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+            portfolio_value = 0
+            
+            # 각 종목의 해당 날짜 가치 계산
+            for symbol, result in portfolio_results.items():
+                if symbol in portfolio_data:
+                    df = portfolio_data[symbol]
+                    try:
+                        # 해당 날짜의 가격 찾기
+                        price_data = df[df.index.strftime('%Y-%m-%d') == date_str]
+                        if not price_data.empty:
+                            current_price = price_data['Close'].iloc[0]
+                            initial_price = df['Close'].iloc[0]
+                            
+                            # 해당 종목의 투자 금액 기준 현재 가치
+                            stock_value = result['amount'] * (current_price / initial_price)
+                            portfolio_value += stock_value
+                    except:
+                        # 데이터가 없으면 초기값 유지
+                        portfolio_value += result['amount']
+            
+            # 일일 수익률 계산
+            if i == 0:
+                daily_return = 0.0
+            else:
+                daily_return = (portfolio_value - prev_portfolio_value) / prev_portfolio_value * 100 if prev_portfolio_value > 0 else 0.0
+            
+            equity_curve[date_str] = portfolio_value
+            daily_returns[date_str] = daily_return
+            prev_portfolio_value = portfolio_value
+        
+        return equity_curve, daily_returns
+    
+    def _fallback_equity_curve(self, request: PortfolioBacktestRequest, 
+                              portfolio_results: Dict, total_amount: float) -> Tuple[Dict, Dict]:
+        """
+        데이터가 없을 때 사용하는 기본 equity curve (선형)
+        """
+        from datetime import datetime
+        import pandas as pd
+        
+        start_date_obj = datetime.strptime(request.start_date, '%Y-%m-%d')
+        end_date_obj = datetime.strptime(request.end_date, '%Y-%m-%d')
+        date_range = pd.date_range(start=start_date_obj, end=end_date_obj, freq='D')
+        
+        # 포트폴리오 최종 가치 계산
+        final_portfolio_value = sum(result['final_value'] for result in portfolio_results.values())
+        growth_rate = (final_portfolio_value / total_amount - 1)
+        
+        equity_curve = {}
+        daily_returns = {}
+        prev_equity = total_amount
+        
+        for i, date in enumerate(date_range):
+            if i == 0:
+                daily_return = 0.0
+                equity_value = total_amount
+            else:
+                # 선형 성장 가정
+                progress = i / (len(date_range) - 1) if len(date_range) > 1 else 1
+                equity_value = total_amount * (1 + growth_rate * progress)
+                daily_return = (equity_value - prev_equity) / prev_equity * 100 if prev_equity > 0 else 0.0
+            
+            equity_curve[date.strftime('%Y-%m-%d')] = equity_value
+            daily_returns[date.strftime('%Y-%m-%d')] = daily_return
+            prev_equity = equity_value
+        
+        return equity_curve, daily_returns
+    
     async def run_portfolio_backtest(self, request: PortfolioBacktestRequest) -> Dict[str, Any]:
         """
         포트폴리오 백테스트 실행
@@ -270,49 +370,54 @@ class PortfolioBacktestService:
                 for result in portfolio_results.values()
             )
             
+            # 가중 평균 최대 드로우다운 계산
+            weighted_max_drawdown = sum(
+                result['weight'] * abs(result.get('strategy_stats', {}).get('max_drawdown_pct', 0))
+                for result in portfolio_results.values()
+            )
+            
+            # 가중 평균 샤프 비율 계산
+            weighted_sharpe_ratio = sum(
+                result['weight'] * result.get('strategy_stats', {}).get('sharpe_ratio', 0)
+                for result in portfolio_results.values()
+            )
+            
+            # 백테스트 기간 계산
+            from datetime import datetime
+            start_date_obj = datetime.strptime(request.start_date, '%Y-%m-%d')
+            end_date_obj = datetime.strptime(request.end_date, '%Y-%m-%d')
+            duration_days = (end_date_obj - start_date_obj).days
+            
+            # 연간 수익률 계산
+            annual_return = ((total_portfolio_value / total_amount) ** (365.25 / duration_days) - 1) * 100 if duration_days > 0 else 0
+            
+            # 포트폴리오 통계 (프론트엔드 호환)
             portfolio_statistics = {
                 'Start': request.start_date,
                 'End': request.end_date,
-                'Strategy': request.strategy,
-                'Strategy_Params': request.strategy_params,
+                'Duration': f'{duration_days} days',
                 'Initial_Value': total_amount,
                 'Final_Value': total_portfolio_value,
+                'Peak_Value': total_portfolio_value,  # 전략 기반에서는 최종값과 동일하게 가정
                 'Total_Return': portfolio_return,
-                'Total_Trades': total_trades,
-                'Portfolio_Win_Rate': weighted_win_rate,
-                'Active_Stocks': len(portfolio_results),
-                'Commission': request.commission
+                'Annual_Return': annual_return,
+                'Annual_Volatility': 0.0,  # 전략 기반에서는 계산 복잡하므로 0으로 설정
+                'Sharpe_Ratio': weighted_sharpe_ratio,
+                'Max_Drawdown': -weighted_max_drawdown,  # 음수로 표시
+                'Avg_Drawdown': -weighted_max_drawdown / 2,  # 평균 드로우다운 추정
+                'Max_Consecutive_Gains': 0,  # 전략 기반에서는 계산 복잡
+                'Max_Consecutive_Losses': 0,  # 전략 기반에서는 계산 복잡
+                'Total_Trading_Days': duration_days,
+                'Positive_Days': 0,  # 전략 기반에서는 계산 복잡
+                'Negative_Days': 0,  # 전략 기반에서는 계산 복잡
+                'Win_Rate': weighted_win_rate
             }
             
-            # 간단한 equity curve와 daily returns 생성 (전략 기반 포트폴리오용)
-            # 시작일과 종료일 기준으로 간단한 시계열 데이터 생성
-            from datetime import datetime, timedelta
-            import pandas as pd
-            
-            start_date_obj = datetime.strptime(request.start_date, '%Y-%m-%d')
-            end_date_obj = datetime.strptime(request.end_date, '%Y-%m-%d')
-            date_range = pd.date_range(start=start_date_obj, end=end_date_obj, freq='D')
-            
-            # 단순화된 equity curve (초기값에서 최종값으로 선형 증가)
-            total_days = len(date_range)
-            growth_rate = portfolio_return / 100
-            
-            equity_curve = {}
-            daily_returns = {}
-            
-            for i, date in enumerate(date_range):
-                if i == 0:
-                    daily_return = 0.0
-                    equity_value = total_amount
-                else:
-                    # 선형 성장 가정
-                    progress = i / (total_days - 1) if total_days > 1 else 1
-                    equity_value = total_amount * (1 + growth_rate * progress)
-                    daily_return = (equity_value - prev_equity) / prev_equity if prev_equity > 0 else 0.0
-                
-                equity_curve[date.strftime('%Y-%m-%d')] = equity_value
-                daily_returns[date.strftime('%Y-%m-%d')] = daily_return * 100  # 퍼센트로 변환
-                prev_equity = equity_value
+            # 실제 포트폴리오 equity curve 생성
+            # 각 종목의 실제 가격 데이터를 기반으로 일일 포트폴리오 가치 계산
+            equity_curve, daily_returns = await self._calculate_realistic_equity_curve(
+                request, portfolio_results, total_amount
+            )
 
             result = {
                 'status': 'success',

@@ -72,7 +72,10 @@ const UnifiedBacktestResults: React.FC<UnifiedBacktestResultsProps> = ({ data, i
     }).format(value);
   };
 
-  const formatPercent = (value: number) => {
+  const formatPercent = (value: number | undefined | null) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return 'N/A';
+    }
     return `${value.toFixed(2)}%`;
   };
 
@@ -140,7 +143,7 @@ const UnifiedBacktestResults: React.FC<UnifiedBacktestResultsProps> = ({ data, i
                   <Col md={3}>
                     <div className="text-center">
                       <h6>총 수익률</h6>
-                      <h4 className={portfolio_statistics.Total_Return >= 0 ? 'text-success' : 'text-danger'}>
+                      <h4 className={(portfolio_statistics.Total_Return || 0) >= 0 ? 'text-success' : 'text-danger'}>
                         {formatPercent(portfolio_statistics.Total_Return)}
                       </h4>
                     </div>
@@ -148,7 +151,7 @@ const UnifiedBacktestResults: React.FC<UnifiedBacktestResultsProps> = ({ data, i
                   <Col md={3}>
                     <div className="text-center">
                       <h6>연간 수익률</h6>
-                      <h5 className={portfolio_statistics.Annual_Return >= 0 ? 'text-success' : 'text-danger'}>
+                      <h5 className={(portfolio_statistics.Annual_Return || 0) >= 0 ? 'text-success' : 'text-danger'}>
                         {formatPercent(portfolio_statistics.Annual_Return)}
                       </h5>
                     </div>
@@ -156,7 +159,7 @@ const UnifiedBacktestResults: React.FC<UnifiedBacktestResultsProps> = ({ data, i
                   <Col md={3}>
                     <div className="text-center">
                       <h6>샤프 비율</h6>
-                      <h5>{portfolio_statistics.Sharpe_Ratio.toFixed(2)}</h5>
+                      <h5>{portfolio_statistics.Sharpe_Ratio ? portfolio_statistics.Sharpe_Ratio.toFixed(2) : 'N/A'}</h5>
                     </div>
                   </Col>
                   <Col md={3}>
@@ -247,9 +250,9 @@ const UnifiedBacktestResults: React.FC<UnifiedBacktestResultsProps> = ({ data, i
                       <tr>
                         <td>상승일/하락일</td>
                         <td>
-                          <span className="text-success">{portfolio_statistics.Positive_Days}</span>
+                          <span className="text-success">{portfolio_statistics.Positive_Days || 0}</span>
                           {' / '}
-                          <span className="text-danger">{portfolio_statistics.Negative_Days}</span>
+                          <span className="text-danger">{portfolio_statistics.Negative_Days || 0}</span>
                         </td>
                       </tr>
                       <tr>

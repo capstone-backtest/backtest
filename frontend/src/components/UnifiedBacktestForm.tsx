@@ -4,7 +4,7 @@ import { UnifiedBacktestRequest } from '../types/api';
 
 interface Stock {
   symbol: string;
-  amount: number;
+  amount: number;  // weight에서 amount로 변경
 }
 
 interface UnifiedBacktestFormProps {
