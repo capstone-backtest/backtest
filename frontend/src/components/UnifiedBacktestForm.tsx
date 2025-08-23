@@ -67,15 +67,17 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
       validationErrors.push('포트폴리오는 최대 10개 종목까지 포함할 수 있습니다.');
     }
 
-    // 심볼 중복 검사
-    const symbols = portfolio.map(stock => stock.symbol.toUpperCase());
-    const uniqueSymbols = new Set(symbols);
-    if (symbols.length !== uniqueSymbols.size) {
+    // 심볼 중복 검사 (CUSTOM 제외)
+    const validSymbols = portfolio
+      .filter(stock => stock.symbol && stock.symbol !== 'CUSTOM')
+      .map(stock => stock.symbol.toUpperCase());
+    const uniqueSymbols = new Set(validSymbols);
+    if (validSymbols.length !== uniqueSymbols.size) {
       validationErrors.push('중복된 종목이 있습니다.');
     }
 
-    // 빈 심볼 검사
-    const emptySymbols = portfolio.filter(stock => !stock.symbol.trim());
+    // 빈 심볼 검사 (CUSTOM 선택 후 미입력 제외)
+    const emptySymbols = portfolio.filter(stock => !stock.symbol.trim() || stock.symbol === 'CUSTOM');
     if (emptySymbols.length > 0) {
       validationErrors.push('모든 종목 심볼을 입력해주세요.');
     }
@@ -107,7 +109,13 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
   const updateStock = (index: number, field: keyof Stock, value: string | number) => {
     const newPortfolio = [...portfolio];
     if (field === 'symbol') {
-      newPortfolio[index].symbol = (value as string).toUpperCase();
+      const symbolValue = (value as string).toUpperCase();
+      if (symbolValue === 'CUSTOM') {
+        // CUSTOM 선택 시 임시로 빈 문자열 설정
+        newPortfolio[index].symbol = '';
+      } else {
+        newPortfolio[index].symbol = symbolValue;
+      }
     } else {
       newPortfolio[index].amount = Number(value);
     }
@@ -160,11 +168,12 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
     try {
       // 포트폴리오 데이터 준비
       const portfolioData = portfolio.map(stock => ({
-        symbol: stock.symbol.toUpperCase(),
+        symbol: stock.symbol === 'CASH' ? 'CASH' : stock.symbol.toUpperCase(),
         amount: stock.amount
       }));
 
       const params = generateStrategyParams();
+      console.log('Portfolio data being sent:', portfolioData);
       console.log('Strategy params being sent:', params);
 
       await onSubmit({
@@ -232,7 +241,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
       <Card>
         <Card.Header>
           <h4> 포트폴리오 백테스트</h4>
-          <p className="mb-0 text-muted">하나 이상의 종목으로 구성된 포트폴리오 백테스트를 실행합니다.</p>
+          <p className="mb-0 text-muted">주식과 현금으로 구성된 포트폴리오 백테스트를 실행합니다. 현금(CASH)을 포함하여 리밸런싱 전략을 테스트할 수 있습니다.</p>
         </Card.Header>
         <Card.Body>
           {errors.length > 0 && (
@@ -250,10 +259,16 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
             <Row className="mb-4">
               <Col>
                 <h5>포트폴리오 구성</h5>
+                <div className="mb-3">
+                  <small className="text-muted">
+                    💡 <strong>현금(CASH)</strong>을 포함하여 포트폴리오를 구성할 수 있습니다. 
+                    예: 현금 50%, AAPL 50% - 리밸런싱 시 이 비율을 유지합니다.
+                  </small>
+                </div>
                 <Table striped bordered hover>
                   <thead>
                     <tr>
-                      <th>종목 심볼</th>
+                      <th>종목/자산</th>
                       <th>투자 금액 ($)</th>
                       <th>비중 (%)</th>
                       <th>작업</th>
@@ -263,13 +278,37 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                     {portfolio.map((stock, index) => (
                       <tr key={index}>
                         <td>
-                          <Form.Control
-                            type="text"
-                            value={stock.symbol}
+                          <Form.Select
+                            value={stock.symbol || ''}
                             onChange={(e) => updateStock(index, 'symbol', e.target.value)}
-                            placeholder="예: AAPL"
-                            maxLength={10}
-                          />
+                          >
+                            <option value="">종목 선택...</option>
+                            <option value="CASH">현금 (CASH)</option>
+                            <optgroup label="주요 종목">
+                              <option value="AAPL">Apple (AAPL)</option>
+                              <option value="MSFT">Microsoft (MSFT)</option>
+                              <option value="GOOGL">Alphabet (GOOGL)</option>
+                              <option value="AMZN">Amazon (AMZN)</option>
+                              <option value="TSLA">Tesla (TSLA)</option>
+                              <option value="NVDA">NVIDIA (NVDA)</option>
+                              <option value="META">Meta (META)</option>
+                              <option value="SPY">S&P 500 ETF (SPY)</option>
+                              <option value="QQQ">NASDAQ ETF (QQQ)</option>
+                            </optgroup>
+                            <optgroup label="직접 입력">
+                              <option value="CUSTOM">직접 입력...</option>
+                            </optgroup>
+                          </Form.Select>
+                          {stock.symbol === 'CUSTOM' && (
+                            <Form.Control
+                              type="text"
+                              value=""
+                              onChange={(e) => updateStock(index, 'symbol', e.target.value.toUpperCase())}
+                              placeholder="종목 심볼 입력 (예: AAPL)"
+                              maxLength={10}
+                              className="mt-2"
+                            />
+                          )}
                         </td>
                         <td>
                           <Form.Control
@@ -282,6 +321,9 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                         </td>
                         <td>
                           {totalAmount > 0 ? ((stock.amount / totalAmount) * 100).toFixed(1) : 0}%
+                          {stock.symbol === 'CASH' && (
+                            <span className="text-muted ms-1">(현금)</span>
+                          )}
                         </td>
                         <td>
                           <Button
