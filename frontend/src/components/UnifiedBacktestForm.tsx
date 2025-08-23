@@ -30,6 +30,23 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
   const [errors, setErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 미리 정의된 종목 옵션
+  const predefinedStocks = [
+    { value: 'CUSTOM', label: '직접 입력' },
+    { value: 'AAPL', label: 'AAPL - Apple Inc.' },
+    { value: 'GOOGL', label: 'GOOGL - Alphabet Inc.' },
+    { value: 'MSFT', label: 'MSFT - Microsoft Corp.' },
+    { value: 'TSLA', label: 'TSLA - Tesla Inc.' },
+    { value: 'AMZN', label: 'AMZN - Amazon.com Inc.' },
+    { value: 'NVDA', label: 'NVDA - NVIDIA Corp.' },
+    { value: 'META', label: 'META - Meta Platforms Inc.' },
+    { value: 'NFLX', label: 'NFLX - Netflix Inc.' },
+    { value: 'SPY', label: 'SPY - SPDR S&P 500 ETF' },
+    { value: 'QQQ', label: 'QQQ - Invesco QQQ Trust' },
+    { value: 'VTI', label: 'VTI - Vanguard Total Stock Market ETF' },
+    { value: 'CASH', label: 'CASH - 현금 (무위험 자산)' }
+  ];
+
   // 전략별 파라미터 정의
   const strategyConfigs = {
     buy_and_hold: { parameters: {} },
@@ -272,13 +289,35 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                     {portfolio.map((stock, index) => (
                       <tr key={index}>
                         <td>
-                          <Form.Control
-                            type="text"
-                            value={stock.symbol}
-                            onChange={(e) => updateStock(index, 'symbol', e.target.value)}
-                            placeholder="예: AAPL, CASH"
-                            maxLength={10}
-                          />
+                          <div>
+                            <Form.Select
+                              value={stock.symbol || 'CUSTOM'}
+                              onChange={(e) => {
+                                const selectedValue = e.target.value;
+                                if (selectedValue === 'CUSTOM') {
+                                  updateStock(index, 'symbol', '');
+                                } else {
+                                  updateStock(index, 'symbol', selectedValue);
+                                }
+                              }}
+                              className="mb-2"
+                            >
+                              {predefinedStocks.map(option => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </Form.Select>
+                            {(stock.symbol === '' || !predefinedStocks.find(opt => opt.value === stock.symbol)) && (
+                              <Form.Control
+                                type="text"
+                                value={stock.symbol}
+                                onChange={(e) => updateStock(index, 'symbol', e.target.value)}
+                                placeholder="종목 심볼 입력 (예: AAPL)"
+                                maxLength={10}
+                              />
+                            )}
+                          </div>
                         </td>
                         <td>
                           <Form.Control
