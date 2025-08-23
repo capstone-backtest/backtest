@@ -60,10 +60,10 @@ git clone <repository-url>
 cd backtest
 
 # 개발 환경 실행
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 # 또는 프로덕션 환경 실행
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 ### 접속
