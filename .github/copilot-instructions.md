@@ -1,16 +1,18 @@
 ## 목표
-이 저장소에서 AI 코딩 에이전트가 빠르게 생산적으로 작업하기 위한 간단·구체적 가이드입니다. 핵심 아키텍처, 실행/디버그 명령, 프로젝트 고유 패턴, 그리고 코드 예시를 포함합니다.
+이 저장소에서 AI 코딩 에이전트가 빠르게 생산적으로 작업하기 위한 간단·구체적 가이드. 핵심 아키텍처, 실행/디버그 명령, 프로젝트 고유 패턴, 그리고 코드 예시를 포함.
 
 ## 빠른 개요 (한 줄)
-백엔드는 FastAPI(포트 8000, `backend/`), 프론트엔드는 Vite 기반 React(개발: 5173, 프로덕션: 8080), 전략은 `backend/app/services/strategy_service.py`에 등록된 Strategy 클래스들을 사용해 `backtesting` 라이브러리로 실행됩니다.
+백엔드는 FastAPI(포트 8000, `backend/`), 프론트엔드는 Vite 기반 React(개발: 5173, 프로덕션: 8080), 전략은 `backend/app/services/strategy_service.py`에 등록된 Strategy 클래스들을 사용해 `backtesting` 라이브러리로 실행.
 
 ## 주요 위치
-  - `backend/app/utils/data_fetcher.py`는 yfinance를 사용합니다. yfinance 관련 API 및 DB 캐시 동작의 상세 설명은 `doc/backend/api.md`를 참조하세요. 캐시 경로·유효기간 변경은 `app/core/config.py`를 참조하세요.
+  - `backend/app/utils/data_fetcher.py`는 yfinance를 사용합니다. yfinance 관련 API 및 DB 캐시 동작의 상세 설명은 `backend/doc/api.md`를 참조. 캐시 경로·유효기간 변경은 `app/core/config.py`를 참조.
 
 ## 아키텍처·데이터 흐름 (요지)
 
 ## 프로젝트-특화 규칙 / 패턴 (에이전트가 알아야 할 것)
   - 코드를 수정하면 항상 마크다운 문서에 최신화를 해야 한다.
+  - 모든 마크다운 문서들은 디렉터리 계층 구조에 맞게 작성되어야 한다.
+  - 백엔드 문서는 `backend/doc/`에, 프론트엔드 문서는 `frontend/doc/`에, 전체 프로젝트 문서는 `doc/`에 위치한다.
 
 ## 실행, 빌드, 테스트 — 핵심 명령
   - 개발 환경은 윈도우, powershell, 도커 데스크탑을 사용한다.
