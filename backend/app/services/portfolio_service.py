@@ -906,22 +906,70 @@ class PortfolioBacktestService:
                 if symbol in portfolio_data:
                     df = portfolio_data[symbol]
                     if len(df) > 0:
-                        start_price = df['Close'].iloc[0]
-                        end_price = df['Close'].iloc[-1]
-                        individual_return = (end_price / start_price - 1) * 100
-                        weight = amount / total_amount
                         investment_type = dca_info[unique_key]['investment_type']
+                        weight = amount / total_amount
                         
-                        individual_returns[unique_key] = {
-                            'symbol': symbol,
-                            'weight': weight,
-                            'amount': amount,
-                            'return': individual_return,
-                            'start_price': start_price,
-                            'end_price': end_price,
-                            'investment_type': investment_type,
-                            'dca_periods': dca_info[unique_key]['dca_periods'] if investment_type == 'dca' else None
-                        }
+                        if investment_type == 'lump_sum':
+                            # 일시불: 시작가 대비 종료가로 수익률 계산
+                            start_price = df['Close'].iloc[0]
+                            end_price = df['Close'].iloc[-1]
+                            individual_return = (end_price / start_price - 1) * 100
+                            
+                            individual_returns[unique_key] = {
+                                'symbol': symbol,
+                                'weight': weight,
+                                'amount': amount,
+                                'return': individual_return,
+                                'start_price': start_price,
+                                'end_price': end_price,
+                                'investment_type': investment_type,
+                                'dca_periods': None
+                            }
+                            
+                        else:  # DCA
+                            # 분할매수: 실제 매수한 주식의 평균 단가 대비 종료가로 수익률 계산
+                            dca_periods = dca_info[unique_key]['dca_periods']
+                            monthly_amount = dca_info[unique_key]['monthly_amount']
+                            
+                            # DCA 수익률 계산을 위한 시뮬레이션
+                            from datetime import datetime, timedelta
+                            start_date_obj = datetime.strptime(request.start_date, '%Y-%m-%d')
+                            
+                            total_shares = 0
+                            total_invested = 0
+                            
+                            for month in range(dca_periods):
+                                # 각 월의 첫 거래일 가격으로 매수
+                                investment_date = start_date_obj + timedelta(days=30 * month)
+                                
+                                # 해당 날짜 이후의 첫 거래일 찾기
+                                month_price_data = df[df.index.date >= investment_date.date()]
+                                
+                                if not month_price_data.empty:
+                                    month_price = month_price_data['Close'].iloc[0]
+                                    shares_bought = monthly_amount / month_price
+                                    total_shares += shares_bought
+                                    total_invested += monthly_amount
+                            
+                            if total_shares > 0:
+                                average_price = total_invested / total_shares  # 평균 매수 단가
+                                end_price = df['Close'].iloc[-1]
+                                individual_return = (end_price / average_price - 1) * 100
+                            else:
+                                average_price = 0
+                                end_price = df['Close'].iloc[-1]
+                                individual_return = 0
+                            
+                            individual_returns[unique_key] = {
+                                'symbol': symbol,
+                                'weight': weight,
+                                'amount': amount,
+                                'return': individual_return,
+                                'start_price': average_price,  # DCA의 경우 평균 매수 단가
+                                'end_price': end_price,
+                                'investment_type': investment_type,
+                                'dca_periods': dca_periods
+                            }
             
             # 결과 포맷팅
             result = {
