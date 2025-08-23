@@ -26,7 +26,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
   const [selectedStrategy, setSelectedStrategy] = useState('buy_and_hold');
   const [strategyParams, setStrategyParams] = useState<Record<string, any>>({});
   const [rebalanceFrequency, setRebalanceFrequency] = useState('monthly');
-  const [commission, setCommission] = useState(0.002);
+  const [commission, setCommission] = useState(0.2); // 퍼센트 형태로 변경 (0.2%)
   const [errors, setErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -175,7 +175,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
         end_date: endDate,
         strategy: selectedStrategy || 'buy_and_hold',
         strategy_params: params,
-        commission: commission,
+        commission: commission / 100, // 퍼센트를 소수점으로 변환 (0.2 -> 0.002)
         rebalance_frequency: rebalanceFrequency
       });
     } catch (error) {
@@ -425,10 +425,10 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                     onChange={(e) => setCommission(Number(e.target.value))}
                     min="0"
                     max="5"
-                    step="0.001"
+                    step="0.01"
                   />
                   <Form.Text className="text-muted">
-                    기본값: 0.2% (거래당)
+                    예: 0.2 (0.2% 수수료)
                   </Form.Text>
                 </Form.Group>
               </Col>
