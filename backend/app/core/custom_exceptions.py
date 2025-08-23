@@ -47,6 +47,15 @@ class BacktestValidationError(HTTPException):
         )
         logger.warning(f"백테스트 검증 실패: {message}")
 
+class ValidationError(HTTPException):
+    """일반적인 검증 실패 시 발생하는 예외"""
+    def __init__(self, message: str):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+        logger.warning(f"검증 실패: {message}")
+
 def handle_yfinance_error(error: Exception, symbol: str, start_date: str, end_date: str) -> HTTPException:
     """yfinance 에러를 적절한 HTTP 예외로 변환"""
     error_str = str(error).lower()

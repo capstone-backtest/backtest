@@ -12,6 +12,11 @@ from app.models.requests import BacktestRequest
 from app.services.yfinance_db import load_ticker_data
 from app.services.backtest_service import backtest_service
 from app.utils.serializers import recursive_serialize
+from app.core.custom_exceptions import (
+    DataNotFoundError, 
+    InvalidSymbolError, 
+    ValidationError
+)
 
 logger = logging.getLogger(__name__)
 
