@@ -20,7 +20,162 @@ class PortfolioBacktestService:
     """포트폴리오 백테스트 서비스"""
     
     @staticmethod
-    def calculate_portfolio_returns(
+    def calculate_dca_portfolio_returns(
+        portfolio_data: Dict[str, pd.DataFrame],
+        amounts: Dict[str, float],
+        dca_info: Dict[str, Dict],
+        start_date: str,
+        end_date: str,
+        rebalance_frequency: str = "monthly"
+    ) -> pd.DataFrame:
+        """
+        분할 매수(DCA)를 고려한 포트폴리오 수익률을 계산합니다.
+        
+        Args:
+            portfolio_data: 각 종목의 가격 데이터 {symbol: DataFrame}
+            amounts: 각 종목의 총 투자 금액 {symbol: amount}
+            dca_info: 분할 매수 정보 {symbol: {investment_type, dca_periods, monthly_amount}}
+            start_date: 시작 날짜
+            end_date: 종료 날짜
+            rebalance_frequency: 리밸런싱 주기
+            
+        Returns:
+            포트폴리오 가치와 수익률이 포함된 DataFrame
+        """
+        from datetime import datetime, timedelta
+        import pandas as pd
+        
+        # 현금 처리: CASH 심볼은 수익률 0%로 처리
+        cash_amount = amounts.get('CASH', 0)
+        stock_amounts = {k: v for k, v in amounts.items() if k != 'CASH'}
+        
+        # 모든 주식 종목의 날짜 범위를 통합
+        all_dates = set()
+        for symbol, df in portfolio_data.items():
+            if symbol != 'CASH':  # 현금 제외
+                all_dates.update(df.index)
+        
+        if not all_dates and cash_amount == 0:
+            raise ValueError("유효한 데이터가 없습니다.")
+        
+        # 현금만 있는 경우 처리
+        if not all_dates and cash_amount > 0:
+            # 기본 날짜 범위 생성 (1일)
+            from datetime import datetime
+            today = datetime.now().date()
+            date_range = pd.DatetimeIndex([today])
+        else:
+            date_range = pd.DatetimeIndex(sorted(all_dates))
+        
+        # 총 투자 금액 계산
+        total_amount = sum(amounts.values())
+        
+        # 시작/종료 날짜 파싱
+        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+        
+        # 포트폴리오 가치 시뮬레이션
+        portfolio_values = []
+        daily_returns = []
+        prev_portfolio_value = 0
+        
+        for current_date in date_range:
+            if current_date.date() < start_date_obj.date():
+                continue
+            if current_date.date() > end_date_obj.date():
+                break
+                
+            current_portfolio_value = cash_amount  # 현금부터 시작
+            
+            # 각 주식 종목의 현재 가치 계산
+            for symbol, df in portfolio_data.items():
+                if symbol == 'CASH':
+                    continue
+                    
+                info = dca_info[symbol]
+                investment_type = info['investment_type']
+                
+                try:
+                    # 해당 날짜의 가격 찾기
+                    price_data = df[df.index.date <= current_date.date()]
+                    if price_data.empty:
+                        continue
+                        
+                    current_price = price_data['Close'].iloc[-1]
+                    
+                    if investment_type == 'lump_sum':
+                        # 일시불 투자: 시작일에 전액 투자
+                        if current_date.date() == start_date_obj.date():
+                            # 시작 가격으로 주식 수량 계산
+                            start_price = price_data['Close'].iloc[0] if not price_data.empty else current_price
+                            shares = amounts[symbol] / start_price
+                        else:
+                            # 이전에 계산된 주식 수량 유지 (간단히 첫날 기준으로 계산)
+                            first_price_data = df[df.index.date >= start_date_obj.date()]
+                            if not first_price_data.empty:
+                                start_price = first_price_data['Close'].iloc[0]
+                                shares = amounts[symbol] / start_price
+                            else:
+                                shares = 0
+                        
+                        stock_value = shares * current_price
+                        
+                    else:  # DCA
+                        # 분할 매수: 매월 일정 금액씩 투자
+                        dca_periods = info['dca_periods']
+                        monthly_amount = info['monthly_amount']
+                        
+                        # 현재까지 투자한 개월 수 계산
+                        months_passed = (current_date.year - start_date_obj.year) * 12 + (current_date.month - start_date_obj.month)
+                        months_invested = min(months_passed + 1, dca_periods)  # 시작월 포함
+                        
+                        # 매월 투자한 주식의 누적 가치 계산
+                        total_shares = 0
+                        for month in range(months_invested):
+                            # 각 월의 첫 거래일 가격으로 매수
+                            investment_date = start_date_obj + timedelta(days=30 * month)
+                            month_price_data = df[df.index.date >= investment_date.date()]
+                            
+                            if not month_price_data.empty:
+                                month_price = month_price_data['Close'].iloc[0]
+                                shares_bought = monthly_amount / month_price
+                                total_shares += shares_bought
+                        
+                        stock_value = total_shares * current_price
+                    
+                    current_portfolio_value += stock_value
+                    
+                except Exception as e:
+                    logger.warning(f"종목 {symbol} 가치 계산 오류 ({current_date}): {e}")
+                    continue
+            
+            # 일일 수익률 계산
+            if prev_portfolio_value > 0:
+                daily_return = (current_portfolio_value - prev_portfolio_value) / prev_portfolio_value
+            else:
+                daily_return = 0.0
+            
+            portfolio_values.append(current_portfolio_value / total_amount)  # 정규화된 가치
+            daily_returns.append(daily_return)
+            prev_portfolio_value = current_portfolio_value
+        
+        # 결과 DataFrame 생성
+        valid_dates = [d for d in date_range if start_date_obj.date() <= d.date() <= end_date_obj.date()]
+        
+        if len(portfolio_values) != len(valid_dates):
+            # 길이가 맞지 않으면 기본값으로 채움
+            portfolio_values = [1.0] * len(valid_dates)
+            daily_returns = [0.0] * len(valid_dates)
+        
+        result = pd.DataFrame({
+            'Date': valid_dates,
+            'Portfolio_Value': portfolio_values,
+            'Daily_Return': daily_returns,
+            'Cumulative_Return': [(v - 1) * 100 for v in portfolio_values]
+        })
+        result.set_index('Date', inplace=True)
+        
+        return result
         portfolio_data: Dict[str, pd.DataFrame],
         amounts: Dict[str, float],
         rebalance_frequency: str = "monthly"
@@ -100,9 +255,9 @@ class PortfolioBacktestService:
         result.set_index('Date', inplace=True)
         
         return result
-    
+
     @staticmethod
-    def calculate_portfolio_statistics(portfolio_data: pd.DataFrame, total_amount: float) -> Dict[str, Any]:
+    def calculate_portfolio_returns(
         """
         포트폴리오 통계 계산
         
@@ -506,7 +661,7 @@ class PortfolioBacktestService:
     async def run_buy_and_hold_portfolio_backtest(self, request: PortfolioBacktestRequest) -> Dict[str, Any]:
         """
         Buy & Hold 포트폴리오 백테스트 실행 (투자 금액 기반)
-        현금(CASH)과 주식을 함께 처리
+        현금(CASH)과 주식을 함께 처리, 분할 매수(DCA) 지원
         """
         try:
             # 각 종목의 데이터 수집
@@ -515,9 +670,21 @@ class PortfolioBacktestService:
             total_amount = sum(item.amount for item in request.portfolio)
             cash_amount = 0
             
+            # 분할 매수 정보 수집
+            dca_info = {}
+            
             for item in request.portfolio:
                 symbol = item.symbol
                 amount = item.amount
+                investment_type = getattr(item, 'investment_type', 'lump_sum')
+                dca_periods = getattr(item, 'dca_periods', 12)
+                
+                # 분할 매수 정보 저장
+                dca_info[symbol] = {
+                    'investment_type': investment_type,
+                    'dca_periods': dca_periods,
+                    'monthly_amount': amount / dca_periods if investment_type == 'dca' else amount
+                }
                 
                 if symbol == 'CASH':
                     # 현금 처리
@@ -526,7 +693,10 @@ class PortfolioBacktestService:
                     logger.info(f"현금 {symbol} 추가 (금액: ${amount:,.2f})")
                     continue
                 
-                logger.info(f"종목 {symbol} 데이터 로드 중 (투자금액: ${amount:,.2f})")
+                logger.info(f"종목 {symbol} 데이터 로드 중 (투자금액: ${amount:,.2f}, 방식: {investment_type})")
+                
+                if investment_type == 'dca':
+                    logger.info(f"분할 매수: ${amount:,.2f}을 {dca_periods}개월에 걸쳐 매달 ${amount/dca_periods:,.2f}씩")
                 
                 # DB에서 데이터 로드
                 df = load_ticker_data(symbol, request.start_date, request.end_date)
@@ -578,7 +748,8 @@ class PortfolioBacktestService:
                         'amount': cash_amount,
                         'return': 0.0,
                         'start_price': 1.0,
-                        'end_price': 1.0
+                        'end_price': 1.0,
+                        'investment_type': 'lump_sum'
                     }
                 }
                 
@@ -599,7 +770,7 @@ class PortfolioBacktestService:
                         'portfolio_statistics': statistics,
                         'individual_returns': individual_returns,
                         'portfolio_composition': [
-                            {'symbol': 'CASH', 'weight': 1.0, 'amount': cash_amount}
+                            {'symbol': 'CASH', 'weight': 1.0, 'amount': cash_amount, 'investment_type': 'lump_sum'}
                         ],
                         'equity_curve': equity_curve,
                         'daily_returns': daily_returns
@@ -612,10 +783,10 @@ class PortfolioBacktestService:
             if not portfolio_data and cash_amount == 0:
                 raise ValueError("포트폴리오의 어떤 종목도 데이터를 가져올 수 없습니다.")
             
-            # 포트폴리오 수익률 계산 (현금 포함)
-            logger.info("포트폴리오 수익률 계산 중...")
-            portfolio_result = self.calculate_portfolio_returns(
-                portfolio_data, amounts, request.rebalance_frequency
+            # 분할 매수를 고려한 포트폴리오 수익률 계산
+            logger.info("분할 매수를 고려한 포트폴리오 수익률 계산 중...")
+            portfolio_result = self.calculate_dca_portfolio_returns(
+                portfolio_data, amounts, dca_info, request.start_date, request.end_date, request.rebalance_frequency
             )
             
             # 통계 계산
@@ -632,7 +803,8 @@ class PortfolioBacktestService:
                     'amount': cash_amount,
                     'return': 0.0,  # 현금 수익률은 0%
                     'start_price': 1.0,
-                    'end_price': 1.0
+                    'end_price': 1.0,
+                    'investment_type': 'lump_sum'
                 }
             
             # 주식 수익률 추가
@@ -642,12 +814,16 @@ class PortfolioBacktestService:
                     end_price = df['Close'].iloc[-1]
                     individual_return = (end_price / start_price - 1) * 100
                     weight = amounts[symbol] / total_amount
+                    investment_type = dca_info[symbol]['investment_type']
+                    
                     individual_returns[symbol] = {
                         'weight': weight,
                         'amount': amounts[symbol],
                         'return': individual_return,
                         'start_price': start_price,
-                        'end_price': end_price
+                        'end_price': end_price,
+                        'investment_type': investment_type,
+                        'dca_periods': dca_info[symbol]['dca_periods'] if investment_type == 'dca' else None
                     }
             
             # 결과 포맷팅
@@ -657,7 +833,13 @@ class PortfolioBacktestService:
                     'portfolio_statistics': statistics,
                     'individual_returns': individual_returns,
                     'portfolio_composition': [
-                        {'symbol': symbol, 'weight': amount / total_amount, 'amount': amount}
+                        {
+                            'symbol': symbol, 
+                            'weight': amount / total_amount, 
+                            'amount': amount,
+                            'investment_type': dca_info[symbol]['investment_type'],
+                            'dca_periods': dca_info[symbol]['dca_periods'] if dca_info[symbol]['investment_type'] == 'dca' else None
+                        }
                         for symbol, amount in amounts.items()
                     ],
                     'equity_curve': {

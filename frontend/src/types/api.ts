@@ -4,6 +4,8 @@
 export interface PortfolioStock {
   symbol: string;
   amount: number;
+  investment_type?: 'lump_sum' | 'dca';
+  dca_periods?: number;
 }
 
 // 통합 백테스트 요청

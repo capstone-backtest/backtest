@@ -5,6 +5,8 @@ import { UnifiedBacktestRequest } from '../types/api';
 interface Stock {
   symbol: string;
   amount: number;
+  investmentType: 'lump_sum' | 'dca'; // 일시불 vs 분할매수
+  dcaPeriods?: number; // 분할매수 기간 (개월)
 }
 
 interface UnifiedBacktestFormProps {
@@ -13,7 +15,12 @@ interface UnifiedBacktestFormProps {
 }
 
 const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loading = false }) => {
-  const [portfolio, setPortfolio] = useState<Stock[]>([{ symbol: '', amount: 10000 }]);
+  const [portfolio, setPortfolio] = useState<Stock[]>([{ 
+    symbol: '', 
+    amount: 10000, 
+    investmentType: 'lump_sum',
+    dcaPeriods: 12 
+  }]);
   const [startDate, setStartDate] = useState('2023-01-01');
   const [endDate, setEndDate] = useState('2024-12-31');
   const [selectedStrategy, setSelectedStrategy] = useState('buy_and_hold');
@@ -98,7 +105,12 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
   };
 
   const addStock = () => {
-    setPortfolio([...portfolio, { symbol: '', amount: 10000 }]);
+    setPortfolio([...portfolio, { 
+      symbol: '', 
+      amount: 10000, 
+      investmentType: 'lump_sum',
+      dcaPeriods: 12 
+    }]);
   };
 
   const removeStock = (index: number) => {
@@ -116,8 +128,12 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
       } else {
         newPortfolio[index].symbol = symbolValue;
       }
-    } else {
+    } else if (field === 'amount') {
       newPortfolio[index].amount = Number(value);
+    } else if (field === 'investmentType') {
+      newPortfolio[index].investmentType = value as 'lump_sum' | 'dca';
+    } else if (field === 'dcaPeriods') {
+      newPortfolio[index].dcaPeriods = Number(value);
     }
     setPortfolio(newPortfolio);
   };
@@ -169,7 +185,9 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
       // 포트폴리오 데이터 준비
       const portfolioData = portfolio.map(stock => ({
         symbol: stock.symbol === 'CASH' ? 'CASH' : stock.symbol.toUpperCase(),
-        amount: stock.amount
+        amount: stock.amount,
+        investment_type: stock.investmentType,
+        dca_periods: stock.dcaPeriods
       }));
 
       const params = generateStrategyParams();
@@ -262,7 +280,9 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                 <div className="mb-3">
                   <small className="text-muted">
                     💡 <strong>현금(CASH)</strong>을 포함하여 포트폴리오를 구성할 수 있습니다. 
-                    예: 현금 50%, AAPL 50% - 리밸런싱 시 이 비율을 유지합니다.
+                    예: 현금 50%, AAPL 50% - 리밸런싱 시 이 비율을 유지합니다.<br/>
+                    📈 <strong>분할 매수(DCA)</strong>: 총 투자금을 여러 개월에 나눠서 투자하는 방식입니다. 
+                    예: $5,000을 12개월 → 매달 $416씩 투자
                   </small>
                 </div>
                 <Table striped bordered hover>
@@ -270,6 +290,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                     <tr>
                       <th>종목/자산</th>
                       <th>투자 금액 ($)</th>
+                      <th>투자 방식</th>
                       <th>비중 (%)</th>
                       <th>작업</th>
                     </tr>
@@ -320,6 +341,42 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                           />
                         </td>
                         <td>
+                          {stock.symbol === 'CASH' ? (
+                            <small className="text-muted">현금 보유</small>
+                          ) : (
+                            <div>
+                              <Form.Select
+                                value={stock.investmentType}
+                                onChange={(e) => updateStock(index, 'investmentType', e.target.value)}
+                                size="sm"
+                              >
+                                <option value="lump_sum">일시불 투자</option>
+                                <option value="dca">분할 매수 (DCA)</option>
+                              </Form.Select>
+                              {stock.investmentType === 'dca' && (
+                                <Form.Control
+                                  type="number"
+                                  value={stock.dcaPeriods || 12}
+                                  onChange={(e) => updateStock(index, 'dcaPeriods', e.target.value)}
+                                  min="1"
+                                  max="60"
+                                  size="sm"
+                                  className="mt-1"
+                                  placeholder="개월"
+                                />
+                              )}
+                              {stock.investmentType === 'dca' && (
+                                <small className="text-muted">
+                                  월 ${(stock.amount / (stock.dcaPeriods || 12)).toLocaleString('en-US', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 0
+                                  })}씩 {stock.dcaPeriods || 12}개월
+                                </small>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td>
                           {totalAmount > 0 ? ((stock.amount / totalAmount) * 100).toFixed(1) : 0}%
                           {stock.symbol === 'CASH' && (
                             <span className="text-muted ms-1">(현금)</span>
@@ -342,6 +399,7 @@ const UnifiedBacktestForm: React.FC<UnifiedBacktestFormProps> = ({ onSubmit, loa
                     <tr>
                       <th>합계</th>
                       <th>${totalAmount.toLocaleString()}</th>
+                      <th>-</th>
                       <th>100.0%</th>
                       <th></th>
                     </tr>

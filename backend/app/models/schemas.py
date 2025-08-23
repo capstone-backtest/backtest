@@ -39,12 +39,23 @@ class PortfolioStock(BaseModel):
     """포트폴리오 종목 모델"""
     symbol: str = Field(..., min_length=1, max_length=10, description="주식 심볼")
     amount: float = Field(..., gt=0, description="투자 금액 (> 0)")
+    investment_type: Optional[str] = Field("lump_sum", description="투자 방식 (lump_sum, dca)")
+    dca_periods: Optional[int] = Field(12, ge=1, le=60, description="분할 매수 기간 (개월)")
     
     @validator('symbol')
     def validate_symbol(cls, v):
+        # CASH는 특별한 심볼로 허용
+        if v.upper() == 'CASH':
+            return v.upper()
         if not v.isalpha():
             raise ValueError('주식 심볼은 영문자만 포함해야 합니다.')
         return v.upper()
+    
+    @validator('investment_type')
+    def validate_investment_type(cls, v):
+        if v not in ['lump_sum', 'dca']:
+            raise ValueError('투자 방식은 lump_sum 또는 dca만 가능합니다.')
+        return v
 
 class PortfolioBacktestRequest(BaseModel):
     """포트폴리오 백테스트 요청 모델"""
