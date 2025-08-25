@@ -15,6 +15,7 @@
 
 - **백엔드**: FastAPI, Python 3.11+, pandas, yfinance
 - **프론트엔드**: React 18, TypeScript, Vite, Bootstrap
+- **데이터베이스**: MySQL
 - **컨테이너**: Docker, Docker Compose
 
 ## 프로젝트 구조
