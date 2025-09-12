@@ -1,7 +1,6 @@
 import React from 'react';
-import BacktestForm from '../components/BacktestForm';
-import BacktestResults from '../components/BacktestResults';
-import { useBacktest } from '../hooks/useBacktest';
+import { BacktestForm, BacktestResults } from '../features/backtest/components';
+import { useBacktest } from '../features/backtest/hooks';
 
 const BacktestPage: React.FC = () => {
   const { results, loading, error, errorType, errorId, isPortfolio, runBacktest, clearError } = useBacktest();

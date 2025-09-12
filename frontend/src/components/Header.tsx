@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FaChartLine, FaPalette } from 'react-icons/fa';
-import { useAuth } from '../hooks/useAuth';
-import { useTheme } from '../hooks/useTheme';
-import { Button } from './ui/button';
-import ThemeSelector from './ThemeSelector';
+import { useAuth } from '../features/auth/hooks';
+import { useTheme } from '../shared/hooks';
+import { Button } from '../shared/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../shared/components/ui/dialog';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -95,20 +101,16 @@ const Header: React.FC = () => {
       
       {/* Theme Selector Modal */}
       {showThemeSelector && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="max-w-4xl w-full max-h-[90vh] overflow-auto">
-            <ThemeSelector />
-            <div className="mt-4 text-center">
-              <Button 
-                onClick={() => setShowThemeSelector(false)}
-                variant="outline"
-                className="bg-background text-foreground"
-              >
-                닫기
-              </Button>
+        <Dialog open={showThemeSelector} onOpenChange={setShowThemeSelector}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+            <DialogHeader>
+              <DialogTitle>테마 설정</DialogTitle>
+            </DialogHeader>
+            <div className="p-4">
+              <p>테마 선택 기능이 곧 추가됩니다.</p>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
     </nav>
   );

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { listPosts, createPost } from '../services/community';
+import { listPosts, createPost } from '../features/community/services';
 import { Link } from 'react-router-dom';
-import { getAuthToken } from '../services/auth';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { getAuthToken } from '../features/auth/services';
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Textarea } from "@/shared/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { Label } from "@/shared/components/ui/label";
 
 const CommunityPage: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);

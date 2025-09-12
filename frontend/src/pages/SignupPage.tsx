@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { register } from '../services/auth';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { register } from '../features/auth/services';
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { Label } from "@/shared/components/ui/label";
 
 const SignupPage: React.FC = () => {
   const [username, setUsername] = useState('');

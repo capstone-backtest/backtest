@@ -1,6 +1,6 @@
 import React from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { useExchangeRate } from "../hooks/useExchangeRate";
+import { useExchangeRate } from "../features/charts/hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 interface ExchangeRateChartProps {

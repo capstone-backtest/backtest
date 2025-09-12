@@ -1,7 +1,7 @@
 import React from 'react';
 import VolatilityTable from './volatility/VolatilityTable';
 import NewsModal from './volatility/NewsModal';
-import { useVolatilityNews } from '../hooks/useVolatilityNews';
+import { useVolatilityNews } from '../features/charts/hooks';
 import { StockVolatilityNewsProps } from '../types/volatility-news';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 

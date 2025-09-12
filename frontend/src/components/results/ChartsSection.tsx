@@ -9,7 +9,7 @@ import {
 } from '../lazy/LazyChartComponents';
 import ChartLoading from '../common/ChartLoading';
 import { formatPercent } from '../../utils/formatters';
-import { useStockData } from '../../hooks/useStockData';
+import { useStockData } from '../../features/charts/hooks';
 import EnhancedChartsSection from './EnhancedChartsSection';
 import { 
   ChartData, 
