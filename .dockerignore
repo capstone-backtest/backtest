@@ -1,0 +1,5 @@
+
+# Ignore gradle cache and large gradle distro
+.spring/.gradle/
+**/.gradle/
+gradle-*-bin.zip
