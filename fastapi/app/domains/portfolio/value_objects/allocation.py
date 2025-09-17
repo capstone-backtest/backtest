@@ -159,6 +159,15 @@ class Allocation:
         
         return float((herfindahl_reciprocal - 1) / (max_div_reciprocal - 1))
     
+    def is_well_diversified(self) -> bool:
+        """포트폴리오가 잘 다변화되었는지 확인"""
+        # 과도한 집중도가 없고, 적절한 수의 자산을 보유
+        return (
+            not self.is_concentrated() and 
+            len(self.weights) >= 3 and
+            self.get_diversification_score() >= 0.5
+        )
+    
     def normalize(self) -> "Allocation":
         """비중 정규화 (총합이 100%가 되도록)"""
         total = self.get_total_weight()

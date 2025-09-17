@@ -27,19 +27,43 @@ class EnhancedPortfolioService(PortfolioService):
     """
     도메인 서비스가 통합된 향상된 포트폴리오 서비스
     
-    기존 PortfolioService의 모든 기능을 유지하면서,
-    DDD 도메인 서비스의 고급 포트폴리오 관리 기능을 추가로 제공합니다.
+    핵심 책임:
+    - 기존 PortfolioService의 모든 기능 유지 (100% 호환성)
+    - DDD 도메인 서비스를 통한 고급 분석 기능 제공
+    - 포트폴리오 최적화, 상관관계 분석, 리밸런싱 추천
+    
+    Enhanced 기능:
+    - 포트폴리오 가중치 최적화
+    - 자산 간 상관관계 매트릭스
+    - 다변화 효과 분석
+    - 리밸런싱 추천 알고리즘
+    - 포트폴리오 품질 평가
     """
     
     def __init__(self):
         """Enhanced 포트폴리오 서비스 초기화"""
+        logger.info("Enhanced 포트폴리오 서비스 초기화 중...")
         super().__init__()
         
-        # DDD 도메인 서비스 초기화
-        self.portfolio_domain_service = PortfolioDomainService()
-        self.data_domain_service = DataDomainService()
+        # DDD 도메인 서비스 초기화 (Lazy Loading)
+        self._portfolio_domain_service = None
+        self._data_domain_service = None
         
-        logger.info("Enhanced 포트폴리오 서비스가 도메인 서비스와 함께 초기화되었습니다")
+        logger.info("Enhanced 포트폴리오 서비스 초기화 완료")
+    
+    @property
+    def portfolio_domain_service(self):
+        """포트폴리오 도메인 서비스 (Lazy Loading)"""
+        if self._portfolio_domain_service is None:
+            self._portfolio_domain_service = PortfolioDomainService()
+        return self._portfolio_domain_service
+    
+    @property
+    def data_domain_service(self):
+        """데이터 도메인 서비스 (Lazy Loading)"""
+        if self._data_domain_service is None:
+            self._data_domain_service = DataDomainService()
+        return self._data_domain_service
     
     async def run_portfolio_backtest_with_optimization(self, request: PortfolioBacktestRequest) -> Dict[str, Any]:
         """

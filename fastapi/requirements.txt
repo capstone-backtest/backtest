@@ -20,7 +20,11 @@ python-multipart==0.0.6
 pytz>=2023.3
 psutil>=5.9.0
 
+# 백테스팅 핵심 의존성
 SQLAlchemy>=2.0
 pymysql>=1.0.2
 redis>=5.0.0
-email-validator>=2.2.0
+
+# 백테스팅에 필요한 수치 계산 라이브러리
+pandas>=2.0.0
+numpy>=1.24.0

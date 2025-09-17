@@ -154,35 +154,54 @@ class TestBacktestService:
             pass
     
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="포트폴리오 백테스트 기능은 현재 지원되지 않음")
-    async def test_run_portfolio_backtest_success(self, sample_portfolio_request, mock_data_generator):
-        """포트폴리오 백테스트 성공 테스트"""
-        # Given
-        request = sample_portfolio_request
-        
+    async def test_get_system_stats_success(self):
+        """시스템 통계 조회 성공 테스트"""
         # When
-        result = await backtest_service.run_portfolio_backtest(request)
+        stats = await backtest_service.get_system_stats()
         
         # Then
-        assert result is not None
-        assert hasattr(result, 'individual_results')
-        assert hasattr(result, 'portfolio_result')
+        assert stats is not None
+        assert isinstance(stats, dict)
         
-        # 개별 결과 검증
-        assert len(result.individual_results) == len(request.portfolio)
-        for individual_result in result.individual_results:
-            assert hasattr(individual_result, 'ticker')
-            assert hasattr(individual_result, 'final_equity')
-            assert individual_result.final_equity > 0
+        # 기본 구조 검증
+        if 'error' not in stats:
+            # 정상적인 통계 구조
+            if 'service_layer' in stats:
+                assert 'engine_loaded' in stats['service_layer']
+            if 'strategy_stats' in stats:
+                assert 'available_strategies' in stats['strategy_stats']
+        else:
+            # 오류 발생 시에도 기본 정보는 있어야 함
+            assert 'basic_info' in stats
+    
+    @pytest.mark.asyncio
+    async def test_validate_backtest_request_success(self, sample_backtest_request):
+        """백테스트 요청 검증 성공 테스트"""
+        # Given
+        request = sample_backtest_request
         
-        # 포트폴리오 결과 검증
-        assert hasattr(result.portfolio_result, 'total_equity')
-        assert hasattr(result.portfolio_result, 'total_return_pct')
-        assert result.portfolio_result.total_equity > 0
+        # When & Then - 검증 통과해야 함
+        try:
+            backtest_service.validate_backtest_request(request)
+        except Exception as e:
+            pytest.fail(f"Valid request should not raise exception: {e}")
+    
+    @pytest.mark.asyncio
+    async def test_validate_backtest_request_invalid_dates(self):
+        """잘못된 날짜로 백테스트 요청 검증 테스트"""
+        # Given
+        request = BacktestRequest(
+            ticker="AAPL",
+            start_date=date(2023, 6, 30),
+            end_date=date(2023, 1, 1),  # 종료일이 시작일보다 이전
+            initial_cash=10000,
+            strategy="buy_and_hold",
+            strategy_params={}
+        )
         
-        # 포트폴리오 합계 검증
-        individual_total = sum(ir.final_equity for ir in result.individual_results)
-        assert abs(individual_total - result.portfolio_result.total_equity) < 1.0  # 소수점 오차 허용
+        # When & Then
+        with pytest.raises((ValidationError, ValueError)):
+            backtest_service.validate_backtest_request(request)
 
     @pytest.mark.asyncio
     async def test_optimize_strategy_success(self, mock_data_generator):

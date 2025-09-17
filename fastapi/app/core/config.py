@@ -12,9 +12,9 @@ class Settings(BaseSettings):
     
     # API 설정
     api_v1_str: str = "/api/v1"
-    project_name: str = "라고할때살걸"
+    project_name: str = "백테스팅 API 서버"
     version: str = "1.0.0"
-    description: str = "FastAPI server for backtesting.py library"
+    description: str = "FastAPI 기반 백테스팅 전용 서버 - 포트폴리오 백테스팅, 전략 최적화, 차트 분석"
     
     # 서버 설정
     host: str = Field(default="0.0.0.0", env="HOST")
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # CORS 설정: read raw env as string and expose a parsed property to avoid
     # pydantic attempting to json-decode complex env values.
     backend_cors_origins_str: str = Field(
-        default="http://localhost:3000,http://localhost:5174,http://localhost:8001,http://localhost:8082,https://backtest.yeonjae.kr,https://backtest-be.yeonjae.kr",
+        default="http://localhost:5174,http://localhost:3000",
         env="BACKEND_CORS_ORIGINS",
     )
 
@@ -63,8 +63,18 @@ class Settings(BaseSettings):
     # 외부 API 설정
     yahoo_finance_timeout: int = 30
     
-    # Redis (데이터 캐싱용)
+    # 데이터베이스 설정 (백테스팅 데이터 캐시)
+    database_url: str = Field(
+        default="mysql+pymysql://root:password@127.0.0.1:3306/stock_data_cache",
+        env="DATABASE_URL"
+    )
+    
+    # Redis (세션 캐싱용)
     redis_url: str = Field(default="redis://redis:6379/0", env="REDIS_URL")
+    
+    # 네이버 뉴스 API (선택사항)
+    naver_client_id: Optional[str] = Field(default=None, env="NAVER_CLIENT_ID")
+    naver_client_secret: Optional[str] = Field(default=None, env="NAVER_CLIENT_SECRET")
     # pydantic v2 configuration
     model_config = {
         "env_file": ".env",

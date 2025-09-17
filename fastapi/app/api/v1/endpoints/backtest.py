@@ -19,7 +19,7 @@ from ....core.custom_exceptions import (
 )
 from ....events.event_system import event_system_manager
 from ....utils.user_messages import get_user_friendly_message, log_error_for_debugging
-from .auth import require_user
+# from .auth import require_user  # 인증 기능 제거됨 - FastAPI는 백테스팅만 담당
 import logging
 import traceback
 import pandas as pd
@@ -140,12 +140,8 @@ async def run_backtest(request: BacktestRequest, authorization: Optional[str] = 
     """
     # 사용자 인증 (선택적)
     user_info = None
-    if authorization:
-        try:
-            user_info = require_user(authorization)
-        except HTTPException:
-            # 인증 실패해도 게스트로 백테스트 실행 허용
-            pass
+    # 인증 없이 모든 사용자가 백테스팅 가능
+    user_info = None
     
     try:
         # v2 방식: DB에서 데이터 로드 시도
@@ -274,12 +270,8 @@ async def get_chart_data(request: BacktestRequest, authorization: Optional[str] 
     """
     # 사용자 인증 (선택적)
     user_info = None
-    if authorization:
-        try:
-            user_info = require_user(authorization)
-        except HTTPException:
-            # 인증 실패해도 게스트로 백테스트 실행 허용
-            pass
+    # 인증 없이 모든 사용자가 백테스팅 가능
+    user_info = None
     
     try:
         # 먼저 실제 백테스트를 실행하여 정확한 통계를 얻습니다
@@ -751,7 +743,7 @@ async def get_backtest_history(
     
     반환값: 사용자의 백테스트 히스토리 목록
     """
-    user_info = require_user(authorization)
+    user_info = None  # 인증 제거됨
     user_id = user_info["user_id"]
     
     try:
@@ -823,7 +815,7 @@ async def get_backtest_history_detail(
     
     반환값: 백테스트 결과 상세 정보 (전략 파라미터, 결과 데이터 포함)
     """
-    user_info = require_user(authorization)
+    user_info = None  # 인증 제거됨
     user_id = user_info["user_id"]
     
     try:
@@ -886,7 +878,7 @@ async def delete_backtest_history(
     
     - **history_id**: 삭제할 히스토리 ID
     """
-    user_info = require_user(authorization)
+    user_info = None  # 인증 제거됨
     user_id = user_info["user_id"]
     
     try:

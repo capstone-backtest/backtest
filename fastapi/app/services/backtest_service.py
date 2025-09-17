@@ -108,34 +108,71 @@ class BacktestService:
     """
     백테스팅 서비스 클래스 (Repository Pattern 및 Factory Pattern 적용)
     
-    이제 Repository와 Factory를 통해 의존성을 주입받고,
-    분리된 전담 서비스들에게 작업을 위임합니다:
-    - BacktestEngine: 백테스트 실행 (Repository 주입)
-    - OptimizationService: 파라미터 최적화 (Repository 주입)
-    - ChartDataService: 차트 데이터 생성 (Repository 주입)
-    - ValidationService: 검증 및 유틸리티
+    핵심 책임:
+    - 백테스트 실행 워크플로우 조정
+    - 전담 서비스들에게 작업 위임
+    - Repository를 통한 데이터 접근
+    - 결과 캐싱 및 메타데이터 관리
+    
+    의존성:
+    - BacktestEngine: 실제 백테스트 실행
+    - OptimizationService: 파라미터 최적화
+    - ChartDataService: 차트 데이터 생성
+    - ValidationService: 입력 데이터 검증
     """
     
     def __init__(self, service_factory_instance=None):
+        logger.info("백테스트 서비스 초기화 중...")
+        
         # Factory Pattern을 통한 서비스 생성
         self.service_factory = service_factory_instance or service_factory
         
-        # Repository Pattern을 통한 의존성 주입된 서비스들
-        self.backtest_engine = self.service_factory.create_backtest_engine()
-        self.optimization_service = self.service_factory.create_optimization_service()
-        self.chart_data_service = self.service_factory.create_chart_data_service()
-        self.validation_service = self.service_factory.create_validation_service()
+        # 핵심 전담 서비스들 (Lazy Loading)
+        self._backtest_engine = None
+        self._optimization_service = None
+        self._chart_data_service = None
+        self._validation_service = None
         
         # Repository 직접 접근 (필요시)
         self.backtest_repository = backtest_repository
         self.data_repository = data_repository
         self.strategy_factory = strategy_factory
         
-        # 호환성을 위해 기존 속성들 유지
+        # 호환성을 위한 레거시 서비스 (점진적 제거 예정)
         from app.utils.data_fetcher import data_fetcher
         from app.services.strategy_service import strategy_service
         self.data_fetcher = data_fetcher
         self.strategy_service = strategy_service
+        
+        logger.info("백테스트 서비스 초기화 완료")
+    
+    @property
+    def backtest_engine(self):
+        """백테스트 엔진 (Lazy Loading)"""
+        if self._backtest_engine is None:
+            self._backtest_engine = self.service_factory.create_backtest_engine()
+        return self._backtest_engine
+    
+    @property
+    def optimization_service(self):
+        """최적화 서비스 (Lazy Loading)"""
+        if self._optimization_service is None:
+            self._optimization_service = self.service_factory.create_optimization_service()
+        return self._optimization_service
+    
+    @property
+    def chart_data_service(self):
+        """차트 데이터 서비스 (Lazy Loading)"""
+        if self._chart_data_service is None:
+            self._chart_data_service = self.service_factory.create_chart_data_service()
+        return self._chart_data_service
+    
+    @property
+    def validation_service(self):
+        """검증 서비스 (Lazy Loading)"""
+        if self._validation_service is None:
+            self._validation_service = self.service_factory.create_validation_service()
+        return self._validation_service
     
     async def run_backtest(self, request: BacktestRequest) -> BacktestResult:
         """백테스트 실행 - Repository Pattern이 적용된 BacktestEngine에 위임"""
@@ -180,17 +217,33 @@ class BacktestService:
     
     async def get_system_stats(self) -> Dict[str, Any]:
         """시스템 통계 정보"""
-        return {
-            'repository_stats': {
-                'backtest_cache': await self.backtest_repository.get_stats() if hasattr(self.backtest_repository, 'get_stats') else {},
-                'data_cache': await self.data_repository.get_cache_stats()
-            },
-            'service_stats': self.service_factory.get_service_stats(),
-            'strategy_stats': {
-                'available_strategies': len(self.strategy_factory.get_available_strategies()),
-                'factory_type': type(self.strategy_factory).__name__
+        try:
+            return {
+                'service_layer': {
+                    'engine_loaded': self._backtest_engine is not None,
+                    'optimization_loaded': self._optimization_service is not None,
+                    'chart_service_loaded': self._chart_data_service is not None,
+                    'validation_loaded': self._validation_service is not None
+                },
+                'repository_stats': {
+                    'backtest_cache': await self.backtest_repository.get_stats() if hasattr(self.backtest_repository, 'get_stats') else {},
+                    'data_cache': await self.data_repository.get_cache_stats() if hasattr(self.data_repository, 'get_cache_stats') else {}
+                },
+                'factory_stats': self.service_factory.get_service_stats() if hasattr(self.service_factory, 'get_service_stats') else {},
+                'strategy_stats': {
+                    'available_strategies': len(self.strategy_factory.get_available_strategies()),
+                    'factory_type': type(self.strategy_factory).__name__
+                }
             }
-        }
+        except Exception as e:
+            logger.warning(f"시스템 통계 수집 중 오류: {str(e)}")
+            return {
+                'error': str(e),
+                'basic_info': {
+                    'service_type': 'BacktestService',
+                    'factory_type': type(self.service_factory).__name__ if self.service_factory else 'None'
+                }
+            }
     
     # 호환성을 위한 유틸리티 메서드들 (ValidationService 위임)
     def safe_float(self, value, default: float = 0.0) -> float:

@@ -1,0 +1,56 @@
+package com.backtest.domain.post.entity;
+
+import com.backtest.domain.user.entity.User;
+import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.time.LocalDateTime;
+
+/**
+ * 댓글 좋아요 엔티티
+ */
+@Entity
+@Table(name = "comment_likes",
+       uniqueConstraints = @UniqueConstraint(columnNames = {"comment_id", "user_id"}))
+@EntityListeners(AuditingEntityListener.class)
+public class CommentLike {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "comment_id", nullable = false)
+    private PostComment comment;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @CreatedDate
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    // 기본 생성자
+    public CommentLike() {}
+
+    // 생성자
+    public CommentLike(PostComment comment, User user) {
+        this.comment = comment;
+        this.user = user;
+    }
+
+    // Getters and Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public PostComment getComment() { return comment; }
+    public void setComment(PostComment comment) { this.comment = comment; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+}
