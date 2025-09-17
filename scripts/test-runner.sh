@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Docker image names
-BACKEND_IMAGE="backtest-backend-test"
+FASTAPI_IMAGE="backtest-fastapi-test"
 FRONTEND_IMAGE="backtest-frontend-test"
 COMPOSE_TEST_FILE="compose/compose.test.yml"
 
@@ -34,10 +34,10 @@ log_error() {
 }
 
 # Build Docker images
-build_backend_image() {
-    log_info "Building backend Docker image..."
+build_fastapi_image() {
+    log_info "Building FastAPI Docker image..."
     cd "$PROJECT_ROOT"
-    docker build -t $BACKEND_IMAGE backend/
+    docker build -t $FASTAPI_IMAGE fastapi/
 }
 
 build_frontend_image() {
@@ -75,25 +75,25 @@ stop_test_database() {
     log_success "Test database stopped!"
 }
 
-# Function to run backend unit tests
+# Function to run FastAPI unit tests
 run_unit_tests() {
     log_info "Running unit tests (fast feedback)..."
-    build_backend_image
-    docker run --rm $BACKEND_IMAGE python -m pytest tests/unit/ -v -m unit --tb=short -q
+    build_fastapi_image
+    docker run --rm $FASTAPI_IMAGE python -m pytest tests/unit/ -v -m unit --tb=short -q
     log_success "Unit tests completed"
 }
 
-# Function to run backend integration tests
+# Function to run FastAPI integration tests
 run_integration_tests() {
     log_info "Running integration tests (DB/routing validation)..."
-    build_backend_image
+    build_fastapi_image
     start_test_database
     
     # Run integration tests with database connection
     docker run --rm --network compose_test_network \
         -e DATABASE_URL="mysql+pymysql://test_user:test_password@mysql-test:3306/stock_data_cache" \
         -e REDIS_URL="redis://redis-test:6379" \
-        $BACKEND_IMAGE python -m pytest tests/integration/ -v -m integration --tb=short -q
+        $FASTAPI_IMAGE python -m pytest tests/integration/ -v -m integration --tb=short -q
     
     stop_test_database
     log_success "Integration tests completed"
@@ -102,14 +102,14 @@ run_integration_tests() {
 # Function to run E2E tests
 run_e2e_tests() {
     log_info "Running E2E tests (golden path validation)..."
-    build_backend_image
+    build_fastapi_image
     start_test_database
     
     # Run E2E tests with full environment
     docker run --rm --network compose_test_network \
         -e DATABASE_URL="mysql+pymysql://test_user:test_password@mysql-test:3306/stock_data_cache" \
         -e REDIS_URL="redis://redis-test:6379" \
-        $BACKEND_IMAGE python -m pytest tests/e2e/ -v -m e2e --tb=short -q
+        $FASTAPI_IMAGE python -m pytest tests/e2e/ -v -m e2e --tb=short -q
     
     stop_test_database
     log_success "E2E tests completed"
@@ -126,14 +126,14 @@ run_frontend_tests() {
 # Function to run coverage
 run_coverage() {
     log_info "Running tests with coverage..."
-    build_backend_image
+    build_fastapi_image
     start_test_database
     
     # Run coverage with database for integration tests
     docker run --rm --network compose_test_network \
         -e DATABASE_URL="mysql+pymysql://test_user:test_password@mysql-test:3306/stock_data_cache" \
         -e REDIS_URL="redis://redis-test:6379" \
-        $BACKEND_IMAGE python -m pytest --cov=app --cov-report=term-missing --cov-report=html
+        $FASTAPI_IMAGE python -m pytest --cov=app --cov-report=term-missing --cov-report=html
     
     stop_test_database
     log_success "Coverage report generated"
@@ -143,13 +143,13 @@ run_coverage() {
 run_lint() {
     log_info "Running linting and type checks..."
     
-    # Backend linting
-    build_backend_image
-    log_info "Checking backend code formatting..."
-    docker run --rm $BACKEND_IMAGE python -m black --check app/ tests/ || (log_error "Black formatting check failed" && exit 1)
+    # FastAPI linting
+    build_fastapi_image
+    log_info "Checking FastAPI code formatting..."
+    docker run --rm $FASTAPI_IMAGE python -m black --check app/ tests/ || (log_error "Black formatting check failed" && exit 1)
     
-    log_info "Checking backend import sorting..."
-    docker run --rm $BACKEND_IMAGE python -m isort --check-only app/ tests/ || (log_error "isort check failed" && exit 1)
+    log_info "Checking FastAPI import sorting..."
+    docker run --rm $FASTAPI_IMAGE python -m isort --check-only app/ tests/ || (log_error "isort check failed" && exit 1)
     
     # Frontend linting
     log_info "Running frontend linting..."
@@ -203,21 +203,21 @@ case "${1:-help}" in
         run_frontend_tests
         
         # Health check similar to verify-before-commit.sh
-        log_info "Building and health-checking backend..."
-        build_backend_image
-        cid=$(docker run -d -p 8001:8000 --rm $BACKEND_IMAGE)
+        log_info "Building and health-checking FastAPI..."
+        build_fastapi_image
+        cid=$(docker run -d -p 8001:8000 --rm $FASTAPI_IMAGE)
         cleanup_health_check() { docker stop "$cid" >/dev/null 2>&1 || true; }
         trap cleanup_health_check EXIT
         
         # Wait for server health
         for i in {1..30}; do
             if curl -fsS http://localhost:8001/health >/dev/null 2>&1; then
-                log_success "Backend health check passed"
+                log_success "FastAPI health check passed"
                 break
             fi
             sleep 1
             if [ "$i" -eq 30 ]; then
-                log_error "Backend health check failed - server not responsive"
+                log_error "FastAPI health check failed - server not responsive"
                 exit 1
             fi
         done

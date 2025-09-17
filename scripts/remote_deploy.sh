@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-BACKEND_IMAGE="$1"
+FASTAPI_IMAGE="$1"
 FRONTEND_IMAGE="$2"
 DEPLOY_PATH="${3:-/opt/backtest}"
 
@@ -9,18 +9,18 @@ DEPLOY_PATH="${3:-/opt/backtest}"
 mkdir -p "${DEPLOY_PATH}"
 
 # Update the docker-compose.yml file directly with the new image tags
-sed -i "s|image: backtest-backend:latest|image: ${BACKEND_IMAGE}|g" "${DEPLOY_PATH}/docker-compose.yml"
+sed -i "s|image: backtest-fastapi:latest|image: ${FASTAPI_IMAGE}|g" "${DEPLOY_PATH}/docker-compose.yml"
 sed -i "s|image: backtest-frontend:latest|image: ${FRONTEND_IMAGE}|g" "${DEPLOY_PATH}/docker-compose.yml"
 
 # Pull images (best-effort)
-docker pull "${BACKEND_IMAGE}" || true
+docker pull "${FASTAPI_IMAGE}" || true
 docker pull "${FRONTEND_IMAGE}" || true
 
 
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 LOGFILE="${DEPLOY_PATH}/deploy.log"
 
-echo "[${TIMESTAMP}] Starting deploy: backend=${BACKEND_IMAGE} frontend=${FRONTEND_IMAGE}" | tee -a "${LOGFILE}"
+echo "[${TIMESTAMP}] Starting deploy: fastapi=${FASTAPI_IMAGE} frontend=${FRONTEND_IMAGE}" | tee -a "${LOGFILE}"
 
 # Show current config for verification
 echo "Current docker-compose.yml configuration:" | tee -a "${LOGFILE}"
@@ -49,12 +49,12 @@ fi
 
 # health checks (best-effort)
 sleep 5
-curl -f http://localhost:8001/health || echo "Backend health check failed" | tee -a "${LOGFILE}"
+curl -f http://localhost:8001/health || echo "FastAPI health check failed" | tee -a "${LOGFILE}"
 curl -f http://localhost:8082 || echo "Frontend health check failed" | tee -a "${LOGFILE}"
 
 # Optional webhook notification if DEPLOY_NOTIFY_WEBHOOK is set
 if [ -n "${DEPLOY_NOTIFY_WEBHOOK:-}" ]; then
-  PAYLOAD="{\"status\":\"${STATUS}\",\"backend\":\"${BACKEND_IMAGE}\",\"frontend\":\"${FRONTEND_IMAGE}\",\"time\":\"${TIMESTAMP}\"}"
+  PAYLOAD="{\"status\":\"${STATUS}\",\"fastapi\":\"${FASTAPI_IMAGE}\",\"frontend\":\"${FRONTEND_IMAGE}\",\"time\":\"${TIMESTAMP}\"}"
   curl -s -X POST -H 'Content-Type: application/json' -d "${PAYLOAD}" "${DEPLOY_NOTIFY_WEBHOOK}" || true
 fi
 

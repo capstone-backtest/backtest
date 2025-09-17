@@ -1,19 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   Github,
-  LogOut,
   Menu,
   MoonStar,
   Palette,
   SunMedium,
 } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import {
   Sheet,
   SheetContent,
@@ -21,14 +18,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from './ui/sheet';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
 import { Separator } from './ui/separator';
 import {
   Dialog,
@@ -44,18 +33,13 @@ import { cn } from '../lib/utils';
 const navigationItems = [
   { href: '/', label: '홈', description: '메인 대시보드로 이동' },
   { href: '/backtest', label: '백테스트', description: '투자 전략 백테스트 실행' },
-  { href: '/community', label: '커뮤니티', description: '사용자 커뮤니티 및 토론' },
-  { href: '/chat', label: '채팅', description: '실시간 채팅 및 질문' },
 ];
 
 const Header: React.FC = () => {
-  const { user, logout } = useAuth();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
-
-  const initials = useMemo(() => user?.username?.charAt(0).toUpperCase() ?? 'U', [user?.username]);
 
   const isActivePath = (path: string) => {
     if (path === '/' && location.pathname === '/') return true;
@@ -119,40 +103,6 @@ const Header: React.FC = () => {
   const AuthControls = () => (
     <div className="hidden md:flex items-center gap-2">
       <ThemeControls />
-      {user ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full border border-border/50 bg-card/70 shadow-sm transition hover:-translate-y-0.5">
-              <Avatar className="h-9 w-9 border border-border/40">
-                <AvatarImage src={undefined} alt={user.username} />
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-60" align="end" forceMount>
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-semibold leading-tight">{user.username}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="flex items-center gap-2">
-              <LogOut className="h-4 w-4" />
-              로그아웃
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : (
-        <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm" className="rounded-full">
-            <Link to="/login">로그인</Link>
-          </Button>
-          <Button asChild size="sm" className="rounded-full shadow-sm">
-            <Link to="/signup">회원가입</Link>
-          </Button>
-        </div>
-      )}
     </div>
   );
 
@@ -246,48 +196,6 @@ const Header: React.FC = () => {
                   </div>
 
                   <Separator />
-
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">계정</p>
-                    {user ? (
-                      <div className="rounded-2xl border border-border/80 bg-card/60 p-4 shadow-sm">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10 border border-border/40">
-                            <AvatarImage src={undefined} alt={user.username} />
-                            <AvatarFallback>{initials}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-semibold">{user.username}</p>
-                            <p className="text-xs text-muted-foreground">{user.email}</p>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => {
-                            logout();
-                            setMobileMenuOpen(false);
-                          }}
-                          size="sm"
-                          variant="outline"
-                          className="mt-4 w-full rounded-full"
-                        >
-                          로그아웃
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Button asChild className="w-full rounded-full">
-                          <Link to="/login" onClick={handleNavigate}>
-                            로그인
-                          </Link>
-                        </Button>
-                        <Button asChild variant="outline" className="w-full rounded-full">
-                          <Link to="/signup" onClick={handleNavigate}>
-                            회원가입
-                          </Link>
-                        </Button>
-                      </div>
-                    )}
-                  </div>
 
                   <Separator />
 

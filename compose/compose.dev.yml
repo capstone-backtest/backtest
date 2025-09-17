@@ -1,10 +1,10 @@
 services:
-  backend:
-    build: ./backend
+  fastapi:
+    build: ./fastapi
     ports:
       - "8001:8000"
     volumes:
-      - ./backend:/app
+      - ./fastapi:/app
     command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     environment:
       - PYTHONPATH=/app
@@ -12,7 +12,7 @@ services:
       - ENVIRONMENT=development
       - REDIS_URL=redis://redis:6379/0
     env_file:
-      - ./backend/.env
+      - ./fastapi/.env
 
   frontend:
     build:
@@ -26,9 +26,9 @@ services:
       - /app/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true
-      - API_PROXY_TARGET=http://backend:8000
+      - API_PROXY_TARGET=http://fastapi:8000
     depends_on:
-      - backend
+      - fastapi
       - redis
   
   # 프론트엔드 테스트 실행을 위한 별도 서비스
@@ -45,11 +45,11 @@ services:
       - test
 
   # 백엔드 테스트 실행을 위한 별도 서비스
-  backend-test:
-    build: ./backend
+  fastapi-test:
+    build: ./fastapi
     working_dir: /app
     volumes:
-      - ./backend:/app
+      - ./fastapi:/app
     command: python -m pytest tests/ -v
     environment:
       - PYTHONPATH=/app

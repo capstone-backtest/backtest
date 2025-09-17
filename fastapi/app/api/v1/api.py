@@ -1,14 +1,13 @@
 """
-API v1 라우터 통합
+API v1 라우터 통합 (백테스팅 전용)
 """
 from fastapi import APIRouter
 from .endpoints import backtest, strategies, optimize, naver_news
-from .endpoints import auth, community, chat, admin
 from .endpoints import yfinance_cache
 
 api_router = APIRouter()
 
-# 각 API 라우터를 메인 API 라우터에 포함
+# 백테스팅 관련 API 라우터만 포함
 api_router.include_router(
     backtest.router,
     prefix="/backtest",
@@ -37,28 +36,4 @@ api_router.include_router(
     naver_news.router,
     prefix="/naver-news",
     tags=["네이버 뉴스 검색"]
-)
-
-api_router.include_router(
-    auth.router,
-    prefix="/auth",
-    tags=["인증"]
-)
-
-api_router.include_router(
-    community.router,
-    prefix="/community",
-    tags=["커뮤니티"]
-)
-
-api_router.include_router(
-    chat.router,
-    prefix="/chat",
-    tags=["채팅"]
-)
-
-api_router.include_router(
-    admin.router,
-    prefix="/admin",
-    tags=["관리자"]
 )

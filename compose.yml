@@ -1,18 +1,18 @@
 services:
-  backend:
-    build: ./backend
+  fastapi:
+    build: ./fastapi
     ports:
       - "8001:8000"
     environment:
       - PYTHONPATH=/app
       - REDIS_URL=redis://redis:6379/0
     env_file:
-      - ./backend/.env
+      - ./fastapi/.env
 
   frontend:
     build: ./frontend
     depends_on:
-      - backend
+      - fastapi
   redis:
     image: redis:7-alpine
     ports:

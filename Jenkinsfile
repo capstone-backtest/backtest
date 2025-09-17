@@ -20,7 +20,7 @@ pipeline {
 
     environment {
         GHCR_OWNER = 'kyj0503'
-        BACKEND_PROD_IMAGE = 'backtest-backend'
+        FASTAPI_PROD_IMAGE = 'backtest-fastapi'
         FRONTEND_PROD_IMAGE = 'backtest-frontend'
         DEPLOY_HOST = 'localhost'
         DEPLOY_USER = 'jenkins'
@@ -100,16 +100,16 @@ pipeline {
                         }
                     }
                 }
-                stage('Backend Tests') {
+                stage('FastAPI Tests') {
                     steps {
                         script {
-                            echo 'Running backend tests with controlled environment...'
+                            echo 'Running FastAPI tests with controlled environment...'
                             sh '''
-                cd backend
+                cd fastapi
                 docker build --build-arg RUN_TESTS=true \
-                  -t backtest-backend-test:${BUILD_NUMBER} .
+                  -t backtest-fastapi-test:${BUILD_NUMBER} .
                             '''
-                            echo "Backend tests passed"
+                            echo "FastAPI tests passed"
                         }
                     }
                 }
@@ -123,17 +123,17 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        mkdir -p reports/backend reports/frontend
+                        mkdir -p reports/fastapi reports/frontend
                         # 호스트측 npm 캐시 디렉터리가 존재하고 Jenkins 사용자가 소유하도록 보장
                         mkdir -p frontend/.npm || true
                         chown ${UID_J}:${GID_J} frontend/.npm || true
 
-                        # 백엔드 JUnit: 이미지 내부에서 테스트를 실행해 JUnit XML을 생성 (Jenkins 사용자 권한)
+                        # FastAPI JUnit: 이미지 내부에서 테스트를 실행해 JUnit XML을 생성 (Jenkins 사용자 권한)
                         # Hypothesis DB 호스트 디렉터리를 마운트하고 HYPOTHESIS_DATABASE 환경변수를 설정
                         docker run --rm -u ${UID_J}:${GID_J} \
                           -v /var/lib/jenkins/.hypothesis:/home/jenkins/.hypothesis \
                           -e HYPOTHESIS_DATABASE=/home/jenkins/.hypothesis/examples \
-                          -v "$PWD/reports/backend:/reports" backtest-backend-test:${BUILD_NUMBER} \
+                          -v "$PWD/reports/fastapi:/reports" backtest-fastapi-test:${BUILD_NUMBER} \
                           sh -lc "pytest tests/unit/ -v --tb=short --junitxml=/reports/junit.xml"
 
                         # 프론트엔드 JUnit: Node 컨테이너에서 vitest를 실행
@@ -156,12 +156,12 @@ pipeline {
   //    - GHCR에 로그인 후 이미지 푸시(재시도 로직 포함).
   stage('Build and Push PROD') {
             parallel {
-                stage('Backend PROD') {
+                stage('FastAPI PROD') {
                     steps {
                         script {
                             withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
-                                def fullImageName = "ghcr.io/${env.GH_USER}/${env.BACKEND_PROD_IMAGE}:${env.BUILD_NUMBER}"
-                                echo "Building PROD backend image: ${fullImageName}"
+                                def fullImageName = "ghcr.io/${env.GH_USER}/${env.FASTAPI_PROD_IMAGE}:${env.BUILD_NUMBER}"
+                                echo "Building PROD FastAPI image: ${fullImageName}"
                                 // 빌드 중 불필요한 오류를 줄이기 위해 buildx 빌더 존재 여부 확인
                                 sh '''
                                   if ! docker buildx inspect backtest-builder >/dev/null 2>&1; then
@@ -170,8 +170,8 @@ pipeline {
                                     docker buildx use backtest-builder || true
                                   fi
                                 '''
-                                sh "docker pull ghcr.io/${env.GH_USER}/${env.BACKEND_PROD_IMAGE}:latest || true"
-                                sh "cd backend && DOCKER_BUILDKIT=1 docker build --build-arg RUN_TESTS=false --build-arg IMAGE_TAG=${BUILD_NUMBER} --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ghcr.io/${env.GH_USER}/${env.BACKEND_PROD_IMAGE}:latest -t ${fullImageName} ."
+                                sh "docker pull ghcr.io/${env.GH_USER}/${env.FASTAPI_PROD_IMAGE}:latest || true"
+                                sh "cd fastapi && DOCKER_BUILDKIT=1 docker build --build-arg RUN_TESTS=false --build-arg IMAGE_TAG=${BUILD_NUMBER} --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ghcr.io/${env.GH_USER}/${env.FASTAPI_PROD_IMAGE}:latest -t ${fullImageName} ."
                                 // GHCR 로그인: 일시적 네트워크 실패를 고려한 재시도 로직
                                 sh '''
                                   set -eu
@@ -288,7 +288,7 @@ pipeline {
                     ]) {
                         def remoteUser = SSH_USER ?: env.DEPLOY_USER
                         def remote = "${remoteUser}@${env.DEPLOY_HOST}"
-                        def backendImage = "ghcr.io/${env.GH_USER}/${env.BACKEND_PROD_IMAGE}:${env.BUILD_NUMBER}"
+                        def fastapiImage = "ghcr.io/${env.GH_USER}/${env.FASTAPI_PROD_IMAGE}:${env.BUILD_NUMBER}"
                         def frontendImage = "ghcr.io/${env.GH_USER}/${env.FRONTEND_PROD_IMAGE}:${env.BUILD_NUMBER}"
 
                         echo "Deploying to ${env.DEPLOY_PATH_PROD} on ${env.DEPLOY_HOST} as ${remoteUser}"
@@ -297,7 +297,7 @@ pipeline {
                         sh "scp -i \"\${SSH_KEY}\" -o StrictHostKeyChecking=no \"${env.DOCKER_COMPOSE_PROD_FILE}\" \"${remote}:${env.DEPLOY_PATH_PROD}/docker-compose.yml\""
                         sh "scp -i \"\${SSH_KEY}\" -o StrictHostKeyChecking=no ./scripts/remote_deploy.sh \"${remote}:${env.DEPLOY_PATH_PROD}/remote_deploy.sh\""
                         sh "ssh -i \"\${SSH_KEY}\" -o StrictHostKeyChecking=no \"${remote}\" \"chmod +x ${env.DEPLOY_PATH_PROD}/remote_deploy.sh\""
-                        sh "ssh -i \"\${SSH_KEY}\" -o StrictHostKeyChecking=no \"${remote}\" \"${env.DEPLOY_PATH_PROD}/remote_deploy.sh ${backendImage} ${frontendImage} ${env.DEPLOY_PATH_PROD}\""
+                        sh "ssh -i \"\${SSH_KEY}\" -o StrictHostKeyChecking=no \"${remote}\" \"${env.DEPLOY_PATH_PROD}/remote_deploy.sh ${fastapiImage} ${frontendImage} ${env.DEPLOY_PATH_PROD}\""
                     }
                 }
             }

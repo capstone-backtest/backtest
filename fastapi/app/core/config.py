@@ -60,13 +60,10 @@ class Settings(BaseSettings):
     # 로깅 설정
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     
-    # 보안 설정
-    secret_key: str = Field(default="your-secret-key-here", env="SECRET_KEY")
-    
     # 외부 API 설정
     yahoo_finance_timeout: int = 30
     
-    # Redis (chat, pub/sub)
+    # Redis (데이터 캐싱용)
     redis_url: str = Field(default="redis://redis:6379/0", env="REDIS_URL")
     # pydantic v2 configuration
     model_config = {
