@@ -1,0 +1,49 @@
+# Development Dockerfile for Spring Boot
+FROM eclipse-temurin:21-jdk-alpine
+
+WORKDIR /app
+
+# Install wget and bash for the Gradle wrapper shebang
+# gradlew generated script uses #!/bin/bash; Alpine doesn't include bash by default
+RUN apk add --no-cache wget bash
+
+# Copy gradle wrapper and build files
+COPY gradlew .
+COPY gradle ./gradle
+COPY build.gradle .
+COPY settings.gradle .
+COPY gradle.properties .
+
+# Make gradlew executable
+RUN chmod +x gradlew
+
+# If the Gradle wrapper jar is missing in the repository, fall back to installing
+# the included `gradle-8.10-bin.zip` and use its `gradle` binary. This avoids
+# build failures when `gradle/wrapper/gradle-wrapper.jar` wasn't committed.
+# Copy optional local gradle distribution (kept for image fallback) but do NOT
+# run dependency resolution at build time for the dev image. In dev we bind-mount
+# the project and run `./gradlew bootRun` inside the running container so
+# dependencies are resolved at runtime which avoids wrapper execution issues
+# during image build.
+COPY gradle-8.10-bin.zip .
+RUN unzip gradle-8.10-bin.zip -d /opt && \
+    ln -s /opt/gradle-8.10/bin/gradle /usr/local/bin/gradle || true
+
+# Copy source code
+COPY src ./src
+
+# Create non-root user
+RUN addgroup -g 1000 spring && \
+    adduser -u 1000 -G spring -s /bin/sh -D spring && \
+    chown -R spring:spring /app
+
+USER spring
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+
+EXPOSE 8080
+
+# Development command with auto-reload
+CMD ["./gradlew", "bootRun", "--no-daemon"]

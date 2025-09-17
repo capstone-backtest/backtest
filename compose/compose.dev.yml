@@ -49,7 +49,14 @@ services:
     volumes:
       - ./spring:/app
     # Use the repository gradle wrapper in dev to run the app with host sources
-    command: ["./gradlew", "bootRun", "--no-daemon"]
+    # Run via bash -lc to ensure correct cwd and shell behavior when using the
+    # bind-mounted host source (avoids edge cases where $0 or symlink resolution
+    # behaves unexpectedly inside the container).
+    # Run the wrapper as root in dev to avoid permission issues when the
+    # host-mounted files are owned by a different UID. This is acceptable for
+    # local development but should NOT be used in production.
+    user: root
+    command: ["bash", "-lc", "./gradlew bootRun --no-daemon"]
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/backtest_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       - SPRING_DATASOURCE_USERNAME=root

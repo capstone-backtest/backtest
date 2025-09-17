@@ -21,7 +21,10 @@ while [ -h "$PRG" ] ; do
 done
 
 SAVED="$(pwd)"
-cd "$(dirname \"$PRG\")" >/dev/null
+# Fix: ensure dirname receives the correct PRG without extra escaped quotes.
+# Original had escaped quotes which caused dirname to see a literal '"./gradlew"'
+# and fail with: cd: ".: No such file or directory
+cd "$(dirname "$PRG")" >/dev/null
 APP_HOME="$(pwd -P)"
 cd "$SAVED" >/dev/null
 

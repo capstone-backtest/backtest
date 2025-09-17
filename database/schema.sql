@@ -8,6 +8,13 @@ SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 SET FOREIGN_KEY_CHECKS=0;
 
+-- Ensure target database exists before creating tables
+CREATE DATABASE IF NOT EXISTS backtest_db
+  CHARACTER SET = 'utf8mb4'
+  COLLATE = 'utf8mb4_0900_ai_ci';
+
+USE backtest_db;
+
 -- =================================================================
 -- 1. 회원 관리 (SpringBoot가 담당할 테이블들)
 -- =================================================================
