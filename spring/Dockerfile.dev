@@ -17,17 +17,18 @@ COPY gradle.properties .
 # Make gradlew executable
 RUN chmod +x gradlew
 
-# If the Gradle wrapper jar is missing in the repository, fall back to installing
-# the included `gradle-8.10-bin.zip` and use its `gradle` binary. This avoids
-# build failures when `gradle/wrapper/gradle-wrapper.jar` wasn't committed.
-# Copy optional local gradle distribution (kept for image fallback) but do NOT
-# run dependency resolution at build time for the dev image. In dev we bind-mount
-# the project and run `./gradlew bootRun` inside the running container so
-# dependencies are resolved at runtime which avoids wrapper execution issues
-# during image build.
-COPY gradle-8.10-bin.zip .
-RUN unzip gradle-8.10-bin.zip -d /opt && \
-    ln -s /opt/gradle-8.10/bin/gradle /usr/local/bin/gradle || true
+# If the Gradle wrapper jar is missing in the repository, fall back to
+# downloading an official Gradle distribution at build time and use its
+# `gradle` binary. This avoids failing the image build when the wrapper jar
+# wasn't committed. Downloading avoids relying on a local `gradle-8.10-bin.zip`.
+ARG GRADLE_VERSION=8.10
+RUN set -eux; \
+  GRADLE_ZIP="gradle-${GRADLE_VERSION}-bin.zip"; \
+  URL="https://services.gradle.org/distributions/${GRADLE_ZIP}"; \
+  wget -q "$URL" -O "/tmp/${GRADLE_ZIP}"; \
+  unzip "/tmp/${GRADLE_ZIP}" -d /opt; \
+  ln -s "/opt/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle || true; \
+  rm -f "/tmp/${GRADLE_ZIP}"
 
 # Copy source code
 COPY src ./src

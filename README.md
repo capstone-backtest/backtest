@@ -26,10 +26,10 @@ frontend/src/
 	└── ...
 database/
 	├── schema.sql   # DB 스키마
+Note: The Spring dev image will download the Gradle distribution during image build if a local
+`gradle-<version>-bin.zip` is not present in the repository. This avoids build failures related
+to a missing local Gradle zip.
 	└── yfinance.sql # 주가 데이터 캐시 스키마
-docs/              # 개발/운영/테스트/아키텍처 문서
-scripts/           # 테스트/배포 스크립트
-```
 
 > 상세 구조와 역할은 docs/DEVELOPMENT_GUIDE.md, docs/ARCHITECTURE_GUIDE.md 참고
 
