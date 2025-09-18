@@ -470,9 +470,9 @@ INSERT IGNORE INTO system_settings (setting_key, setting_value, value_type, cate
 
 -- 기본 채팅방 생성
 INSERT IGNORE INTO chat_rooms (id, name, description, room_type, created_by) VALUES
-(1, '🎯 백테스팅 전략 토론', '백테스팅 전략과 관련된 토론을 나누는 공간입니다', 'public', 1),
-(2, '📊 시장 분석 & 뉴스', '시장 분석과 뉴스를 공유하는 공간입니다', 'public', 1),
-(3, '❓ Q&A 질문답변', '백테스팅과 투자에 관한 질문과 답변을 나누는 공간입니다', 'public', 1);
+(1, '백테스팅 전략 토론', '백테스팅 전략과 관련된 토론을 나누는 공간입니다', 'public', 1),
+(2, '시장 분석 & 뉴스', '시장 분석과 뉴스를 공유하는 공간입니다', 'public', 1),
+(3, 'Q&A 질문답변', '백테스팅과 투자에 관한 질문과 답변을 나누는 공간입니다', 'public', 1);
 
 SET FOREIGN_KEY_CHECKS=1;
 

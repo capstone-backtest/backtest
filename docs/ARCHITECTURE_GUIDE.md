@@ -1,429 +1,157 @@
 # 아키텍처 가이드
 
-이 문서는 백테스팅 시스템의 전체적인 아키텍처와 설계 원칙을 설명합니다.
+이 문서는 백테스팅 플랫폼의 전체 아키텍처, 서비스 간 경계, 데이터 흐름을 설명합니다. 2024년 3분기 기준으로 시스템은 `FastAPI 전략 엔진`과 `Spring Boot 커뮤니티/인증`으로 백엔드가 이원화되어 있습니다.
 
-## 목차
+## 1. 시스템 개요
 
-1. [시스템 개요](#시스템-개요)
-2. [아키텍처 패턴](#아키텍처-패턴)
-3. [도메인 모델](#도메인-모델)
-4. [데이터베이스 설계](#데이터베이스-설계)
-5. [컴포넌트 구조](#컴포넌트-구조)
-6. [상태 관리](#상태-관리)
+### 1.1 구성 요소
 
-## 시스템 개요
-
-### 전체 구조
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │◄──►│    Backend      │◄──►│   Database      │
-│   React + TS    │    │   FastAPI       │    │    MySQL        │
-│   Vite          │    │   Python        │    │    Redis        │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  UI Components  │    │ Business Logic  │    │  Data Storage   │
-│  Charts         │    │ Backtest Engine │    │  Cache Layer    │
-│  Forms          │    │ API Endpoints   │    │  External APIs  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌────────────────────┐
+│    Frontend (Vite) │
+│ React • TS • shadcn │
+└─────────┬──────────┘
+          │ REST/WS
+          ▼
+┌────────────────────┐         ┌────────────────────┐
+│ FastAPI Backtester │  gRPC?  │ Spring Boot Social │
+│ 전략 시뮬레이션     │◄──────►│ 인증·커뮤니티·채팅 │
+└─────────┬──────────┘         └─────────┬──────────┘
+          │                                    │
+          ▼                                    ▼
+┌────────────────────┐         ┌────────────────────┐
+│  Redis Cache       │         │ MySQL 8 (공유 스키마) │
+│  백테스트 메타/큐   │         │ 사용자·커뮤니티 데이터 │
+└────────────────────┘         └────────────────────┘
 ```
 
-### 주요 특징
-- **마이크로서비스 지향**: 프론트엔드와 백엔드 분리
-- **이벤트 기반**: 비동기 이벤트 처리 시스템
-- **캐시 우선**: 데이터베이스 캐시를 통한 성능 최적화
-- **확장 가능**: 새로운 전략과 기능 추가 용이
+| 계층 | 주요 역할 | 기술 스택 |
+| --- | --- | --- |
+| 프런트엔드 | 전략 작성, 결과 시각화, 커뮤니티 UI | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| 전략 엔진 | 백테스트 실행, 데이터 수집/캐시, 리스크 분석 | FastAPI, Pydantic, SQLAlchemy, Celery, Redis |
+| 커뮤니티 백엔드 | JWT 인증/인가, 회원/권한, 게시판, 실시간 채팅 | Spring Boot 3.3, JPA, WebSocket(STOMP), Spring Security |
+| 데이터 레이어 | 트랜잭션 데이터, 캐시 | MySQL 8, Redis 7, yfinance, Testcontainers |
 
-## 아키텍처 패턴
+### 1.2 서비스 경계
 
-### Domain-Driven Design (DDD)
-현재 부분적으로 적용 중이며, 점진적으로 확장하고 있습니다.
+- **FastAPI 서비스** (`fastapi/`)
+  - 전략 파라미터 검증 및 실행 파이프라인
+  - 시계열 데이터 수집 (Yahoo Finance, 네이버 뉴스)
+  - 백테스트 결과/리포트 계산, 캐시 업데이트
+  - REST API: `/api/v1/**`
+- **Spring Boot 서비스** (`spring/`)
+  - 회원 가입/로그인, JWT 토큰 발급 및 세션 관리
+  - 커뮤니티 게시글/댓글/좋아요 API (`/api/community/**`)
+  - 사용자 프로필 관리 (`/api/users/**`)
+  - WebSocket(STOMP) 기반 실시간 채팅 (`/ws`, `/topic/chat/{roomId}`)
+  - REST API: `/api/auth/**`, `/api/users/**`, `/api/chat/**`
 
-#### 현재 구조
+두 서비스는 MySQL 스키마와 이벤트(향후 Kafka 도입 예정)를 통해 데이터를 공유하며, HTTP API를 통해 상호 연동합니다. 예를 들어 백테스트 히스토리는 FastAPI가 생성하고, Spring Boot가 사용자와의 매핑을 수행합니다.
+
+## 2. 인프라 & 배포
+
+- **컨테이너 오케스트레이션**: Docker Compose (`compose/compose.*.yml`)
+  - 공통: `fastapi`, `spring`, `frontend`, `mysql`, `redis`
+  - 개발용 오버레이: 라이브 리로드, 볼륨 마운트, 테스트 DB
+  - 프로덕션 오버레이: 멀티 스테이지 이미지, 헬스체크 강화
+- **CI/CD**: Jenkins 파이프라인 (`Jenkinsfile`)에서 서비스별 빌드 → 통합 테스트 → 이미지 푸시 → 배포 순으로 수행
+- **모니터링**: Spring Boot Actuator (`/actuator/**`), FastAPI metrics endpoint, Prometheus/Grafana (준비 중)
+
+## 3. 도메인 구조
+
+### 3.1 FastAPI (전략 엔진)
+
 ```
-app/
-├── api/                 # Presentation Layer
-├── services/            # Application Layer (주요 비즈니스 로직)
-├── domains/             # Domain Layer (점진 도입)
-├── repositories/        # Infrastructure Layer
-└── events/              # Event System
-```
-
-#### 도메인 경계
-- **Backtest Domain**: 백테스트 실행, 결과 분석, 성과 지표
-- **Portfolio Domain**: 포트폴리오 구성, 리밸런싱, 자산 배분
-- **Data Domain**: 데이터 수집, 캐싱, 품질 관리
-
-### CQRS (Command Query Responsibility Segregation)
-명령과 쿼리를 분리하여 처리합니다.
-
-```python
-# Command 예시 - 백테스트 실행
-class RunBacktestCommand:
-    def __init__(self, ticker: str, strategy: str, ...):
-        self.ticker = ticker
-        self.strategy = strategy
-
-# Query 예시 - 백테스트 결과 조회
-class GetBacktestResultQuery:
-    def __init__(self, backtest_id: str):
-        self.backtest_id = backtest_id
-```
-
-### 이벤트 시스템
-도메인 이벤트를 통한 느슨한 결합을 구현합니다.
-
-```python
-# 이벤트 정의
-class BacktestCompletedEvent:
-    def __init__(self, backtest_id: str, result: dict):
-        self.backtest_id = backtest_id
-        self.result = result
-
-# 이벤트 핸들러
-class BacktestMetricsHandler:
-    def handle(self, event: BacktestCompletedEvent):
-        # 성과 지표 계산 및 저장
-        pass
+fastapi/app/
+├── api/          # REST 라우터 (전략 실행, 보고서 조회)
+├── services/     # 애플리케이션 서비스 (백테스트, 최적화, 데이터 파이프라인)
+├── domains/      # 도메인 모델 (Backtest, Portfolio, MarketData 등)
+├── repositories/ # DB/캐시 어댑터 (SQLAlchemy, Redis)
+└── events/       # 도메인 이벤트 & 핸들러
 ```
 
-## 도메인 모델
+- **DDD**: Backtest/Portfolio/Data 도메인으로 구분, CQRS 스타일 명령/조회 객체 활용.
+- **이벤트 흐름**: 백테스트 완료 → 결과 이벤트 발행 → 리포트/알림/히스토리 업데이트.
+- **데이터**: 전략 결과는 `backtest_history`, 시계열 데이터는 `stock_data_cache` 스키마에 저장.
 
-### 백테스트 도메인
+### 3.2 Spring Boot (커뮤니티/인증)
 
-#### 엔티티
-```python
-class Backtest:
-    def __init__(self, id: BacktestId, strategy: Strategy, period: DatePeriod):
-        self.id = id
-        self.strategy = strategy
-        self.period = period
-        self.status = BacktestStatus.PENDING
-    
-    def execute(self) -> BacktestResult:
-        # 백테스트 실행 로직
-        pass
+```
+spring/src/main/java/com/backtest/
+├── auth/         # AuthController, AuthService, UserSession 엔티티
+├── user/         # 사용자 조회/프로필 수정 API
+├── community/    # 게시글·댓글·좋아요 도메인 + 서비스
+├── chat/         # 채팅방, 메시지, WebSocket/STOMP 핸들러
+└── global/       # 보안 설정, CORS, 예외 처리, JWT 유틸리티
 ```
 
-#### 값 객체
-```python
-class BacktestResult:
-    def __init__(self, total_return: Decimal, sharpe_ratio: Decimal, ...):
-        self.total_return = total_return
-        self.sharpe_ratio = sharpe_ratio
-        self.max_drawdown = max_drawdown
-    
-    def is_profitable(self) -> bool:
-        return self.total_return > Decimal('0')
+- **보안**: Spring Security + JWT(HS256). `JwtAuthenticationFilter`가 Authorization 헤더를 검증하고 SecurityContext를 구성합니다.
+- **데이터 접근**: Spring Data JPA + Hibernate. MySQL ENUM 컬럼은 AttributeConverter로 대/소문자 이슈 해결.
+- **채팅**: `/ws` 엔드포인트에 SockJS/STOMP 지원. 메시지는 `SimpMessagingTemplate`을 통해 `/topic/chat/{roomId}`로 브로드캐스팅 되고, 영속화하여 이력을 남깁니다.
+- **테스트**: H2(MySQL 모드) 프로파일 + SpringBootTest, STOMP는 Mock 브로커로 검증.
+
+## 4. 데이터베이스
+
+### 4.1 스키마 구분
+
+모든 테이블은 `database/schema.sql`에 정의되어 있으며, 역할상으로 다음과 같이 나뉩니다.
+
+| 범주 | 담당 서비스 | 주요 테이블 |
+| ---- | ---------- | ----------- |
+| 회원/인증 | Spring Boot | `users`, `user_sessions`, `user_social_accounts` |
+| 커뮤니티 | Spring Boot | `posts`, `post_comments`, `post_likes`, `comment_likes`, `notices`, `reports` |
+| 채팅 | Spring Boot | `chat_rooms`, `chat_room_members`, `chat_messages` |
+| 백테스트 | FastAPI + Spring Boot | `backtest_history`, `strategy_favorites`, `backtest_metrics` |
+| 시세 캐시 | FastAPI | `stocks`, `daily_prices`, `dividends`, `cache_metadata` |
+
+### 4.2 데이터 흐름
+
+```
+사용자 → Frontend → (JWT 포함 요청)
+          ├─ Spring Boot → 사용자 검증, 커뮤니티 콘텐츠, 채팅
+          │               ↕ MySQL (users/posts/rooms ...)
+          │               ↔ Redis (채팅 세션 캐시 예정)
+          └─ FastAPI     → 전략 검증 & 실행 → 결과 저장(Backtest History)
+                          ↕ MySQL (백테스트 결과)
+                          ↕ Redis (데이터 캐시)
+                          ↔ 외부 API (Yahoo Finance, Naver News)
 ```
 
-### 포트폴리오 도메인
+- Spring Boot는 `backtest_history.user_id`를 통해 FastAPI 결과와 사용자를 연결합니다.
+- 향후 이벤트 브로커(Kafka) 도입 시, 백테스트 완료 이벤트 → 커뮤니티에 자동 공유 등의 워크플로우를 구성할 예정입니다.
 
-#### 집합체
-```python
-class Portfolio:
-    def __init__(self, assets: List[Asset], rebalance_frequency: RebalanceFrequency):
-        self.assets = assets
-        self.rebalance_frequency = rebalance_frequency
-    
-    def add_asset(self, asset: Asset):
-        # 가중치 합계 검증
-        if self.total_weight + asset.weight > 1.0:
-            raise ValueError("Total weight cannot exceed 100%")
-        self.assets.append(asset)
-    
-    def rebalance(self, current_values: Dict[str, Decimal]):
-        # 리밸런싱 로직
-        pass
-```
+## 5. 보안 & 인증 흐름
 
-### 현금 자산 처리
-현금 자산은 특별한 자산 타입으로 처리됩니다.
+1. **회원가입/로그인**: `/api/auth/register`, `/api/auth/login` → Access/Refresh 토큰 발급.
+2. **요청 보호**: `SecurityConfig`에서 `/api/auth/**`, `/health`, `/actuator/**`, `/swagger-ui/**`를 제외한 모든 요청에 인증을 요구합니다.
+3. **토큰 검증**: `Authorization: Bearer <token>` 헤더 → `JwtAuthenticationFilter` → `CustomUserDetailsService` 로드.
+4. **리프레시**: `/api/auth/refresh`에서 Refresh 토큰 검증 후 새 토큰 발급, 세션 갱신.
+5. **로그아웃**: `/api/auth/logout` → 세션 레코드 `is_revoked` 처리.
 
-```python
-class CashAsset(Asset):
-    def __init__(self, amount: Decimal):
-        super().__init__(symbol="CASH", amount=amount)
-        self.volatility = Decimal('0')
-        self.expected_return = Decimal('0')
-    
-    def get_price_data(self, period: DatePeriod) -> List[PriceData]:
-        # 현금은 가격 변동 없음
-        return []
-```
+## 6. 실시간 채팅
 
-## 데이터베이스 설계
+- STOMP 엔드포인트: `/ws` (SockJS fallback 지원)
+- Application Prefix: `/app`
+- Subscribe Prefix: `/topic`
+- 메시지 흐름: 클라이언트 `/app/chat/{roomId}` 전송 → `ChatService.sendMessage` → DB 저장 → `/topic/chat/{roomId}` 브로드캐스트.
+- REST 보조 API: `/api/chat/rooms`, `/api/chat/messages`, `/api/chat/rooms/{id}/messages`.
 
-### 데이터베이스 분리
-시스템은 두 개의 분리된 데이터베이스를 사용합니다:
+## 7. 테스트 전략
 
-#### 1. Community Database
-```sql
--- 사용자 관리
-users (id, username, email, password_hash, investment_type, ...)
-user_sessions (id, user_id, session_token, expires_at, ...)
+| 계층 | 도구 | 비고 |
+| --- | --- | --- |
+| Spring Boot | JUnit 5, AssertJ, SpringBootTest, H2(MySQL 모드) | 인증/커뮤니티/채팅 서비스 단위 테스트 |
+| FastAPI | pytest, httpx, pytest-asyncio | API/도메인/리포트 검증 |
+| Frontend | Vitest, Testing Library | 컴포넌트/훅/상태 관리 테스트 |
+| 통합 | docker compose + scripts/test-runner.sh | 서비스 간 계약 검증 |
 
--- 커뮤니티
-posts (id, user_id, title, content, view_count, like_count, ...)
-post_comments (id, post_id, user_id, content, ...)
-post_likes (id, post_id, user_id, ...)
+## 8. 향후 로드맵
 
--- 백테스트 히스토리
-backtest_history (id, user_id, backtest_type, parameters, results, ...)
-```
+- Kafka 기반 이벤트 아키텍처 도입 (백테스트 완료 → 커뮤니티 자동 공유, 알림).
+- Spring Boot ↔ FastAPI 간 gRPC(or REST) 비동기 호출 정비.
+- 채팅 서버 확장성 강화를 위한 Redis Pub/Sub 또는 메시지 브로커 연동.
+- Zero-downtime 배포를 위한 Blue/Green 전략 및 헬스체크 고도화.
 
-#### 2. Stock Data Cache Database
-```sql
--- 주식 정보
-stocks (id, ticker, name, exchange, sector, ...)
-daily_prices (stock_id, date, open, high, low, close, volume, ...)
+---
 
--- 부가 정보
-dividends (id, stock_id, date, dividend, ...)
-stock_splits (id, stock_id, date, split_ratio, ...)
-exchange_rates (id, currency_pair, date, rate, ...)
-
--- 캐시 관리
-cache_metadata (id, ticker, data_type, last_fetch, next_update, ...)
-```
-
-### 데이터 흐름
-```
-API Request → Cache Check → Data Fetch → Business Logic → Response
-     ↓             ↓            ↓              ↓            ↓
-  Validation   MySQL DB    yfinance API   Backtest     JSON Result
-```
-
-### 캐시 전략
-- **우선순위**: DB 캐시 → 외부 API
-- **자동 보강**: 누락된 데이터 구간 자동 채움
-- **품질 관리**: 데이터 품질 등급 및 메타데이터 관리
-
-## 컴포넌트 구조
-
-### 프론트엔드 아키텍처
-
-#### 계층 구조
-```
-Pages (라우트)
-  ↓
-Containers (비즈니스 로직)
-  ↓
-Components (UI 컴포넌트)
-  ↓
-Hooks (상태 관리)
-  ↓
-Services (API 통신)
-```
-
-#### 주요 컴포넌트
-```typescript
-// 페이지 컴포넌트
-const BacktestPage = () => {
-  const { result, loading, error, runBacktest } = useBacktest();
-  
-  return (
-    <div>
-      <UnifiedBacktestForm onSubmit={runBacktest} />
-      <UnifiedBacktestResults result={result} loading={loading} />
-    </div>
-  );
-};
-
-// 폼 컴포넌트
-const UnifiedBacktestForm = ({ onSubmit }) => {
-  const formState = useBacktestForm();
-  
-  return (
-    <form onSubmit={handleSubmit}>
-      <PortfolioForm {...formState.portfolio} />
-      <DateRangeForm {...formState.dateRange} />
-      <StrategyForm {...formState.strategy} />
-    </form>
-  );
-};
-```
-
-#### 차트 컴포넌트
-```typescript
-// 차트 컴포넌트 계층
-<ChartsSection>
-  <OHLCChart data={ohlcData} indicators={indicators} />
-  <EquityChart data={equityData} />
-  <TradesChart data={trades} />
-</ChartsSection>
-
-// 지연 로딩
-const LazyOHLCChart = lazy(() => import('./components/charts/OHLCChart'));
-```
-
-### 백엔드 아키텍처
-
-#### 레이어 구조
-```python
-# API Layer - 요청/응답 처리
-@router.post("/backtest/run")
-async def run_backtest(request: BacktestRequest) -> BacktestResult:
-    command = CreateBacktestCommand.from_request(request)
-    result = await command_bus.execute(command)
-    return BacktestResponse.from_result(result)
-
-# Application Layer - 비즈니스 로직 조율
-class BacktestService:
-    def __init__(self, repo: BacktestRepository, event_bus: EventBus):
-        self.repo = repo
-        self.event_bus = event_bus
-    
-    async def run_backtest(self, command: CreateBacktestCommand):
-        # 비즈니스 로직 실행
-        result = self.backtest_engine.execute(...)
-        
-        # 이벤트 발행
-        event = BacktestCompletedEvent(result)
-        await self.event_bus.publish(event)
-        
-        return result
-
-# Domain Layer - 핵심 비즈니스 규칙
-class BacktestEngine:
-    def execute(self, strategy: Strategy, data: MarketData) -> BacktestResult:
-        # 백테스트 실행 로직
-        pass
-```
-
-#### 의존성 주입
-```python
-# 의존성 컨테이너
-class Container:
-    def __init__(self):
-        self.backtest_repo = BacktestRepository()
-        self.event_bus = EventBus()
-        self.backtest_service = BacktestService(
-            self.backtest_repo, 
-            self.event_bus
-        )
-```
-
-## 상태 관리
-
-### 프론트엔드 상태 관리
-
-#### 로컬 상태 우선
-```typescript
-// 컴포넌트 레벨 상태
-const [loading, setLoading] = useState(false);
-const [error, setError] = useState(null);
-
-// 커스텀 훅으로 로직 분리
-const useBacktest = () => {
-  const [state, setState] = useState(initialState);
-  
-  const runBacktest = useCallback(async (request) => {
-    setState(prev => ({ ...prev, loading: true }));
-    try {
-      const result = await api.runBacktest(request);
-      setState(prev => ({ ...prev, result, loading: false }));
-    } catch (error) {
-      setState(prev => ({ ...prev, error, loading: false }));
-    }
-  }, []);
-  
-  return { ...state, runBacktest };
-};
-```
-
-#### 상태 구조
-```typescript
-interface BacktestState {
-  // 폼 상태
-  portfolio: PortfolioAsset[];
-  dateRange: DateRange;
-  strategy: StrategyConfig;
-  
-  // 실행 상태
-  loading: boolean;
-  error: string | null;
-  
-  // 결과 상태
-  result: BacktestResult | null;
-  chartData: ChartData | null;
-}
-```
-
-#### 리듀서 패턴
-```typescript
-const backtestReducer = (state: BacktestState, action: BacktestAction) => {
-  switch (action.type) {
-    case 'SET_PORTFOLIO':
-      return { ...state, portfolio: action.payload };
-    case 'SET_LOADING':
-      return { ...state, loading: action.payload };
-    case 'SET_RESULT':
-      return { ...state, result: action.payload, loading: false };
-    default:
-      return state;
-  }
-};
-```
-
-### 백엔드 상태 관리
-
-#### 무상태 서비스
-```python
-# 서비스는 상태를 가지지 않음
-class BacktestService:
-    def __init__(self, repository: BacktestRepository):
-        self.repository = repository  # 의존성만 주입
-    
-    async def run_backtest(self, request: BacktestRequest):
-        # 매번 새로운 실행, 상태 저장 없음
-        return await self.execute_backtest(request)
-```
-
-#### 캐시 상태
-```python
-# 캐시는 별도 계층에서 관리
-class DataCache:
-    def __init__(self):
-        self.memory_cache = {}
-        self.db_cache = DatabaseCache()
-    
-    async def get_stock_data(self, ticker: str, period: DatePeriod):
-        # 메모리 → DB → 외부 API 순서로 조회
-        if ticker in self.memory_cache:
-            return self.memory_cache[ticker]
-        
-        db_data = await self.db_cache.get(ticker, period)
-        if db_data:
-            self.memory_cache[ticker] = db_data
-            return db_data
-        
-        # 외부 API 호출 및 캐시 저장
-        external_data = await self.fetch_from_yfinance(ticker, period)
-        await self.db_cache.save(ticker, external_data)
-        self.memory_cache[ticker] = external_data
-        
-        return external_data
-```
-
-### 데이터 동기화
-```typescript
-// 프론트엔드와 백엔드 간 타입 동기화
-interface BacktestRequest {
-  ticker: string;
-  start_date: string;  // YYYY-MM-DD
-  end_date: string;
-  strategy: StrategyType;
-  // ...
-}
-
-// 백엔드 Pydantic 모델과 일치
-class BacktestRequest(BaseModel):
-    ticker: str
-    start_date: date
-    end_date: date
-    strategy: StrategyType
-```
-
-이 아키텍처는 확장성, 유지보수성, 테스트 가능성을 고려하여 설계되었으며, 점진적으로 DDD 패턴을 도입하고 있습니다.
+자세한 개발 및 운영 절차는 [`docs/DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md)와 [`docs/RUNBOOK.md`](RUNBOOK.md)를 참고하세요.

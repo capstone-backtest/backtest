@@ -1,80 +1,124 @@
-# 백테스팅 시스템
+# 백테스팅 플랫폼 모노레포
 
-FastAPI + React 기반의 투자 전략 백테스팅 시스템입니다.
+리액트 프론트엔드, FastAPI 전략 엔진, Spring Boot 커뮤니티/인증 백엔드가 하나의 모노레포로 구성된 투자 전략 백테스팅 플랫폼입니다. 도커 컴포즈 한 번으로 전체 스택을 개발/운영 환경에서 기동할 수 있도록 구성했습니다.
 
-## 프로젝트 소개
+## 아키텍처 한눈에 보기
 
-투자 전략의 과거 성과를 분석하는 웹 기반 백테스팅 도구입니다. 다양한 기술적 지표로 전략을 시뮬레이션하고 리스크와 수익성을 분석합니다.
-
-### 주요 특징
-- 포트폴리오 및 단일 종목 백테스트 지원
-- 현금 자산 포함 리스크 관리
-- 실시간 주가 데이터(yfinance), 뉴스(네이버) 연동
-- 시각적 차트 및 성과 분석
-
-### 주요 폴더 구조
 ```
-backend/app/
-	├── api/         # FastAPI 라우터
-	├── services/    # 서비스 로직
-	├── domains/     # 도메인 모델
-	└── ...
-frontend/src/
-	├── components/  # UI 컴포넌트
-	├── hooks/       # 커스텀 훅
-	├── pages/       # 라우트별 페이지
-	└── ...
-database/
-	├── schema.sql   # DB 스키마
-Note: The Spring dev image will download the Gradle distribution during image build if a local
-`gradle-<version>-bin.zip` is not present in the repository. This avoids build failures related
-to a missing local Gradle zip.
-	└── yfinance.sql # 주가 데이터 캐시 스키마
+┌────────────┐   ┌─────────────┐   ┌─────────────┐
+│ Frontend   │   │ FastAPI     │   │ Spring Boot │
+│ React/Vite │   │ 백테스트 엔진│   │ 인증·커뮤니티 │
+└─────┬──────┘   └──────┬──────┘   └──────┬──────┘
+      │                 │                 │
+      ▼                 ▼                 ▼
+┌────────────┐   ┌─────────────┐   ┌────────────────┐
+│  사용자 UI │   │ 전략 시뮬레이션│   │ 회원·게시글·채팅 │
+└────────────┘   └─────────────┘   └────────┬───────┘
+                                            ▼
+                                  ┌────────────────┐
+                                  │ MySQL / Redis │
+                                  └────────────────┘
+```
 
-> 상세 구조와 역할은 docs/DEVELOPMENT_GUIDE.md, docs/ARCHITECTURE_GUIDE.md 참고
+- **FastAPI (Python)**: 전략 실행, 시계열 데이터 수집 및 캐시, 백테스트 결과 산출.
+- **Spring Boot (Java)**: 회원 인증/인가, 커뮤니티 게시판, 실시간 채팅(WebSocket/STOMP).
+- **Frontend (React/TypeScript)**: 투자 전략 작성, 결과 시각화, 커뮤니티 UI.
+- **데이터 스토어**: MySQL(통합 스키마), Redis(캐시/큐), Testcontainers 기반 테스트 지원.
 
-## 빠른 시작
+## 주요 디렉터리 구조
 
-### 개발 환경 실행
+```
+backend/           # (deprecated) 과거 FastAPI 코드 백업 - 참고용
+fastapi/           # FastAPI 백엔드 (전략 엔진)
+frontend/          # React + Vite + Tailwind + shadcn/ui 프론트엔드
+spring/            # Spring Boot 백엔드 (인증, 커뮤니티, 채팅)
+database/          # MySQL 스키마 & 시드 데이터
+compose/           # 환경별 docker compose 오버레이
+scripts/           # 공용 스크립트 (테스트, 유틸)
+docs/              # 아키텍처/운영/테스트 문서 모음
+```
+
+### Spring Boot 서브 모듈 요약 (`spring/`)
+- `com.backtest.auth`: 회원가입/로그인/토큰 재발급, JWT 기반 인증.
+- `com.backtest.user`: 사용자 프로필 API.
+- `com.backtest.community`: 게시글·댓글·좋아요 CRUD.
+- `com.backtest.chat`: 채팅방 관리 및 STOMP 브로드캐스트 (`/ws`, `/topic/chat/{roomId}`).
+- `com.backtest.global`: CORS, 보안, 예외 처리 등 공용 컴포넌트.
+
+## 빠른 시작 (Docker Compose)
+
+> **사전 준비**: Docker + Docker Compose, 4GB 이상 메모리 권장.
+
 ```bash
-# 개발 환경 시작
+# 개발 환경(핫 리로드 포함)
 docker compose -f compose.yml -f compose/compose.dev.yml up --build -d
 
-# 백그라운드 실행
-docker compose -f compose.yml -f compose/compose.dev.yml up -d
+# 로그 확인
+docker compose logs -f fastapi spring frontend
 
-# 시스템 종료
+# 종료
 docker compose -f compose.yml -f compose/compose.dev.yml down
-
-# 프론트엔드 npm 패키지 추가/수정 후에는 반드시 아래 명령어로 강제 재빌드 (캐시 무시, 백그라운드 실행 아님)
-docker compose -f compose.yml -f compose/compose.dev.yml build --no-cache
 ```
-### 접속 정보
-- **프론트엔드**: http://localhost:5174
-- **백엔드 API**: http://localhost:8001
-- **API 문서**: http://localhost:8001/api/v1/docs
 
-### 테스트 실행
+### 서비스 포트
+- **Frontend**: http://localhost:5174
+- **FastAPI**: http://localhost:8001 (`/api/v1/**`)
+- **Spring Boot**: http://localhost:8080 (`/api/**`, `/ws`)
+- **OpenAPI 문서**:
+  - FastAPI: http://localhost:8001/api/v1/docs
+  - Spring Boot: http://localhost:8080/swagger-ui/index.html
+- **MySQL**: localhost:3306 (`root/password`)
+- **Redis**: localhost:6379
+
+## 개별 서비스 실행 팁
+
+### Spring Boot 백엔드
 ```bash
-# 백엔드/프론트엔드 테스트는 scripts/test-runner.sh로 실행
-./scripts/test-runner.sh unit         # 단위 테스트
-./scripts/test-runner.sh integration  # 통합 테스트
-./scripts/test-runner.sh all          # 전체 테스트
+cd spring
+./gradlew bootRun      # 개발 서버 (http://localhost:8080)
+./gradlew test         # H2 (MySQL 모드) 기반 테스트 전체 실행
+./gradlew build        # JAR 생성 (build/libs/*.jar)
 ```
-### Radix UI 등 커스텀 Select/Dropdown 테스트 가이드
+- 기본 설정: `spring/src/main/resources/application.properties`
+- 테스트 프로필: `src/test/resources/application-test.properties`
+- JWT 비밀키는 Base64 또는 Hex 문자열 모두 지원합니다.
 
-Radix UI 등 커스텀 셀렉트(Select/Dropdown) 컴포넌트는 실제 `<select>` 엘리먼트를 사용하지 않으므로, Testing Library의 `user.selectOptions` 대신 드롭다운 트리거를 클릭하고 옵션을 클릭하는 방식으로 테스트해야 합니다.
+### FastAPI 백엔드
+```bash
+cd fastapi
+poetry install  # 또는 requirements.txt 기반 가상환경 구성
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+pytest          # FastAPI 단위/통합 테스트
+```
 
-## 기술 스택
+### 프론트엔드
+```bash
+cd frontend
+pnpm install
+pnpm dev --host --port 5174
+pnpm test
+```
 
-- **프론트엔드**: React 18, TypeScript, Vite, Tailwind CSS, Recharts
-- **백엔드**: FastAPI, Python, Pydantic, MySQL, backtesting.py
-- **인프라**: Docker, Jenkins, nginx
+## 테스트 실행
 
-## 문서
+| 대상 | 명령어 | 비고 |
+| ---- | ------ | ---- |
+| 전체 스택 (Docker) | `./scripts/test-runner.sh all` | 서비스별 테스트 일괄 실행 |
+| Spring Boot | `cd spring && ./gradlew test` | H2(MySQL 모드) + Mock STOMP |
+| FastAPI | `cd fastapi && pytest` | pytest + coverage |
+| Frontend | `cd frontend && pnpm test` | Vitest + Testing Library |
 
-자세한 개발/운영/테스트/아키텍처/기여 가이드는 [`docs/`](docs/) 폴더에서 관리합니다.
+## 배포 참고
 
-## 라이선스
+- 생산 환경에서는 `compose/compose.prod.yml` 오버레이 사용.
+- Jenkins 파이프라인 예시는 `Jenkinsfile`, CI 관련 가이드는 `docs/jenkins_troubleshooting.md` 참고.
+- Spring Boot 이미지는 멀티 스테이지 Dockerfile로 빌드(`spring/Dockerfile`), Gradle wrapper와 Toolchain을 활용해 항상 Java 21로 컴파일됩니다.
 
-이 프로젝트는 GNU AFFERO GENERAL PUBLIC LICENSE 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 확인하세요.
+## 추가 문서
+
+- [`docs/ARCHITECTURE_GUIDE.md`](docs/ARCHITECTURE_GUIDE.md): 멀티 백엔드 아키텍처 및 데이터 흐름 상세.
+- [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md): 로컬 개발/테스트 환경 세팅.
+- [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md): 서비스별 테스트 전략.
+- [`docs/RUNBOOK.md`](docs/RUNBOOK.md): 장애 대응 및 운영 가이드.
+
+기여 또는 개선 제안은 PR/이슈로 남겨 주세요. 🙌

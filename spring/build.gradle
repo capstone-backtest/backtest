@@ -57,6 +57,7 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:mysql'
+    testImplementation 'com.h2database:h2'
     
     // Test Runtime
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
