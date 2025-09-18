@@ -1,4 +1,7 @@
-.gradle
+.gradle/
 build/
 gradle-root/
 gradle-home/
+/.gradle/**
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties

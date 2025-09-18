@@ -1,119 +1,64 @@
-.env
+# Root-level ignores (common across subprojects)
 
-# Build artifacts and caches
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Node
+node_modules/
 frontend/dist/
+
+# Python
 **/__pycache__/
 **/*.py[cod]
-*.log
-node_modules
+.venv/
 
-# Local jenkins logs
-jenkins_log/
-/.gradle
-/gradle-root
-/gradle-home
-/spring/build
-/.gradle/
-/.gradle/**
-
-# Common developer ignores from template
-HELP.md
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### VS Code ###
-.vscode/
-
-### Application Properties ###
-application.properties
-application-*.properties
-*.env
-
-### Logs ###
+# Logs
 logs/
 *.log
 *.log.*
 *.out
 
-### Monitoring & Metrics ###
+# Gradle and build artifacts (ignore caches/build outputs)
+/.gradle/
+build/
+gradle-root/
+gradle-home/
+
+# But keep wrapper artifacts required to run the wrapper
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!gradlew
+!gradlew.bat
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Java/IDE temp folders
+out/
+bin/
+
+# Monitoring & metrics (optional local data)
 prometheus-data/
-**/prometheus/data/
-**/prometheus/wal/
-**/prometheus/snapshots/
 grafana-data/
-**/grafana/data/
-**/grafana/plugins/
-**/grafana/sessions/
-**/grafana/png/
 alertmanager-data/
-**/alertmanager/data/
-
-### Docker volumes
-docker-volumes/
-
-### Temporary monitoring files
-*.tmp
-*.temp
 monitoring-temp/
 
-### Production deployment files (수동 관리)
-monitoring/docker-compose.production.yml
-monitoring/config/prometheus/prometheus.production.yml
-monitoring/scripts/start-production.sh
-monitoring/docker-compose.deploy.yml
-monitoring/docker-compose.local.yml
-monitoring/config/prometheus/prometheus.deploy.yml
-monitoring/scripts/start-deploy.sh
-monitoring/scripts/stop-deploy.sh
-
-### Docker ###
+# Docker volumes / local docker overrides
+docker-volumes/
 docker-compose.override.yml
 docker-compose.*.local.yml
 
-### Environment files ###
-.env
-.env.local
-.env.*.local
-
-### macOS ###
-.DS_Store
-.AppleDouble
-.LSOverride
-
-### Windows ###
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-### Linux ###
+# Misc
 *~
