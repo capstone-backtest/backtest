@@ -3,6 +3,9 @@ FROM eclipse-temurin:21-jdk-alpine
 
 WORKDIR /app
 
+# Set Gradle user home to a user-specific directory (prevents using /app)
+ENV GRADLE_USER_HOME=/home/spring/.gradle
+
 # Install wget and bash for the Gradle wrapper shebang
 # gradlew generated script uses #!/bin/bash; Alpine doesn't include bash by default
 RUN apk add --no-cache wget bash
@@ -35,8 +38,9 @@ COPY src ./src
 
 # Create non-root user
 RUN addgroup -g 1000 spring && \
-    adduser -u 1000 -G spring -s /bin/sh -D spring && \
-    chown -R spring:spring /app
+  adduser -u 1000 -G spring -s /bin/sh -D spring && \
+  mkdir -p ${GRADLE_USER_HOME} && \
+  chown -R spring:spring /app ${GRADLE_USER_HOME}
 
 USER spring
 

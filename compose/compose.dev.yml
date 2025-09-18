@@ -48,16 +48,17 @@ services:
     # In dev we bind-mount the spring source so host edits are reflected
     volumes:
       - ./spring:/app
+      - gradle-cache:/home/spring/.gradle
     # Use the repository gradle wrapper in dev to run the app with host sources
     # Run via bash -lc to ensure correct cwd and shell behavior when using the
     # bind-mounted host source (avoids edge cases where $0 or symlink resolution
     # behaves unexpectedly inside the container).
-    # Run the wrapper as root in dev to avoid permission issues when the
-    # host-mounted files are owned by a different UID. This is acceptable for
-    # local development but should NOT be used in production.
-    user: root
+    # Use a non-root user inside the container for file ownership safety.
+    # If the image doesn't create 'spring' user, Dockerfile.dev will create it.
+    user: spring
     command: ["bash", "-lc", "./gradlew bootRun --no-daemon"]
     environment:
+      - GRADLE_USER_HOME=/home/spring/.gradle
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/backtest_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=password
@@ -98,3 +99,6 @@ services:
   mysql:
     ports:
       - "3307:3306"
+
+volumes:
+  gradle-cache:

@@ -9,4 +9,9 @@ node_modules
 
 # Local jenkins logs
 jenkins_log/
-/spring/.gradle/
+/.gradle
+/gradle-root
+/gradle-home
+/spring/build
+/.gradle/
+/.gradle/**
