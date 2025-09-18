@@ -16,7 +16,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from app.services.backtest_service import backtest_service
 from app.models.requests import BacktestRequest, OptimizationRequest, PlotRequest
 from fastapi import HTTPException
-from app.core.custom_exceptions import DataNotFoundError, BacktestValidationError, ValidationError
+from app.core.custom_exceptions import DataNotFoundError, BacktestValidationError, ValidationError as AppValidationError
+from pydantic import ValidationError as PydanticValidationError
 from tests.fixtures.mock_data import MockStockDataGenerator
 from tests.fixtures.expected_results import ExpectedResults
 
@@ -189,19 +190,16 @@ class TestBacktestService:
     @pytest.mark.asyncio
     async def test_validate_backtest_request_invalid_dates(self):
         """잘못된 날짜로 백테스트 요청 검증 테스트"""
-        # Given
-        request = BacktestRequest(
-            ticker="AAPL",
-            start_date=date(2023, 6, 30),
-            end_date=date(2023, 1, 1),  # 종료일이 시작일보다 이전
-            initial_cash=10000,
-            strategy="buy_and_hold",
-            strategy_params={}
-        )
-        
-        # When & Then
-        with pytest.raises((ValidationError, ValueError)):
-            backtest_service.validate_backtest_request(request)
+        # Given & When & Then
+        with pytest.raises((AppValidationError, ValueError, PydanticValidationError)):
+            BacktestRequest(
+                ticker="AAPL",
+                start_date=date(2023, 6, 30),
+                end_date=date(2023, 1, 1),  # 종료일이 시작일보다 이전
+                initial_cash=10000,
+                strategy="buy_and_hold",
+                strategy_params={}
+            )
 
     @pytest.mark.asyncio
     async def test_optimize_strategy_success(self, mock_data_generator):

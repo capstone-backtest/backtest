@@ -80,31 +80,14 @@ class GetBacktestHistoryQueryHandler(QueryHandler[GetBacktestHistoryQuery]):
     async def handle(self, query: GetBacktestHistoryQuery) -> Dict[str, Any]:
         """백테스트 히스토리 조회"""
         try:
-            filters = {}
-            if query.user_id:
-                filters['user_id'] = query.user_id
-            if query.symbol:
-                filters['symbol'] = query.symbol
-            if query.strategy:
-                filters['strategy'] = query.strategy
-            if query.date_from:
-                filters['date_from'] = query.date_from
-            if query.date_to:
-                filters['date_to'] = query.date_to
-            
-            results = await asyncio.to_thread(
-                self.backtest_repository.get_backtest_history,
-                filters,
-                query.limit,
-                query.offset
-            )
-            
+            # FastAPI는 백테스트 히스토리를 DB에 저장하지 않으므로 빈 결과를 반환합니다.
             return {
                 'success': True,
-                'results': results,
-                'total_count': len(results),
+                'results': [],
+                'total_count': 0,
                 'limit': query.limit,
-                'offset': query.offset
+                'offset': query.offset,
+                'message': 'Backtest history persistence is disabled in FastAPI. Use /share to create shareable URLs.'
             }
             
         except Exception as e:

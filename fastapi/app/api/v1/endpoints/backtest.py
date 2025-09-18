@@ -34,46 +34,9 @@ portfolio_service = PortfolioBacktestService()
 
 def _save_backtest_history(user_id: int, request: BacktestRequest, result: BacktestResult):
     """백테스트 결과를 히스토리에 저장"""
-    try:
-        engine = _get_engine()
-        with engine.begin() as conn:
-            # 결과에서 주요 지표 추출
-            if hasattr(result, 'data') and result.data:
-                final_value = getattr(result.data, 'Equity_Final', None)
-                total_return = getattr(result.data, 'Return', None)
-                sharpe_ratio = getattr(result.data, 'Sharpe_Ratio', None) if hasattr(result.data, 'Sharpe_Ratio') else None
-                max_drawdown = getattr(result.data, 'Max_Drawdown', None)
-                
-                # 결과 데이터를 JSON으로 직렬화
-                result_data = result.model_dump() if hasattr(result, 'model_dump') else None
-            else:
-                final_value = total_return = sharpe_ratio = max_drawdown = result_data = None
-
-            conn.execute(text(
-                """
-                INSERT INTO backtest_history 
-                (user_id, ticker, strategy_name, start_date, end_date, initial_cash, 
-                 final_value, total_return, sharpe_ratio, max_drawdown, strategy_params, result_data)
-                VALUES (:uid, :ticker, :strategy, :start_date, :end_date, :initial_cash,
-                        :final_value, :total_return, :sharpe_ratio, :max_drawdown, :strategy_params, :result_data)
-                """
-            ), {
-                "uid": user_id,
-                "ticker": request.ticker,
-                "strategy": request.strategy,
-                "start_date": request.start_date,
-                "end_date": request.end_date,
-                "initial_cash": request.initial_cash,
-                "final_value": final_value,
-                "total_return": total_return,
-                "sharpe_ratio": sharpe_ratio,
-                "max_drawdown": max_drawdown,
-                "strategy_params": json.dumps(request.strategy_params) if request.strategy_params else None,
-                "result_data": json.dumps(result_data) if result_data else None
-            })
-    except Exception as e:
-        logger.warning(f"백테스트 히스토리 저장 실패: {str(e)}")
-        # 히스토리 저장 실패는 전체 요청을 실패시키지 않음
+    # DB 영속화 제거: FastAPI는 백테스트 계산에 집중하고 히스토리는 공유 가능한 URL로 대체합니다.
+    # 이 함수는 더 이상 DB에 기록하지 않습니다. 유지해 둔 이유는 다른 모듈에서 호출될 수 있기 때문입니다.
+    logger.debug("_save_backtest_history called but persistence is disabled in FastAPI; skipping DB write.")
 
 
 @router.get(
@@ -743,59 +706,18 @@ async def get_backtest_history(
     
     반환값: 사용자의 백테스트 히스토리 목록
     """
-    user_info = None  # 인증 제거됨
-    user_id = user_info["user_id"]
-    
-    try:
-        engine = _get_engine()
-        with engine.begin() as conn:
-            # 쿼리 조건 구성
-            where_conditions = ["user_id = :uid", "is_deleted = 0"]
-            params = {"uid": user_id, "limit": limit, "offset": offset}
-            
-            if ticker:
-                where_conditions.append("ticker = :ticker")
-                params["ticker"] = ticker
-            
-            if strategy:
-                where_conditions.append("strategy_name = :strategy")
-                params["strategy"] = strategy
-            
-            where_clause = " AND ".join(where_conditions)
-            
-            # 히스토리 조회
-            rows = conn.execute(text(f"""
-                SELECT id, ticker, strategy_name, start_date, end_date, initial_cash,
-                       final_value, total_return, sharpe_ratio, max_drawdown, created_at
-                FROM backtest_history 
-                WHERE {where_clause}
-                ORDER BY created_at DESC
-                LIMIT :limit OFFSET :offset
-                """), params).mappings().all()
-            
-            # 전체 개수 조회
-            total_count = conn.execute(text(f"""
-                SELECT COUNT(*) 
-                FROM backtest_history 
-                WHERE {where_clause}
-                """), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).scalar()
-            
-            return {
-                "status": "success",
-                "data": {
-                    "items": [dict(row) for row in rows],
-                    "total_count": total_count,
-                    "limit": limit,
-                    "offset": offset
-                }
-            }
-            
-    except Exception as e:
-        logger.error(f"백테스트 히스토리 조회 중 오류: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="백테스트 히스토리 조회 실패"
-        )
+    # 히스토리 DB 조회 제거: FastAPI는 백테스트 계산 전용이며 히스토리는 쿼리스트링으로 공유합니다.
+    # 대신 클라이언트(프론트엔드)가 생성한 공유 URL 목록을 바로 반환하도록 안내 메시지를 보냅니다.
+    return {
+        "status": "success",
+        "data": {
+            "items": [],
+            "total_count": 0,
+            "limit": limit,
+            "offset": offset,
+            "message": "FastAPI는 백테스트 히스토리를 DB에 저장하지 않습니다. 공유 가능한 URL은 /share 엔드포인트를 사용하세요."
+        }
+    }
 
 
 @router.get(
@@ -815,52 +737,11 @@ async def get_backtest_history_detail(
     
     반환값: 백테스트 결과 상세 정보 (전략 파라미터, 결과 데이터 포함)
     """
-    user_info = None  # 인증 제거됨
-    user_id = user_info["user_id"]
-    
-    try:
-        engine = _get_engine()
-        with engine.begin() as conn:
-            row = conn.execute(text(
-                """
-                SELECT * FROM backtest_history 
-                WHERE id = :hid AND user_id = :uid AND is_deleted = 0
-                """
-            ), {"hid": history_id, "uid": user_id}).mappings().first()
-            
-            if not row:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="백테스트 히스토리를 찾을 수 없습니다."
-                )
-            
-            # JSON 필드 파싱
-            result_dict = dict(row)
-            if result_dict.get('strategy_params'):
-                try:
-                    result_dict['strategy_params'] = json.loads(result_dict['strategy_params'])
-                except:
-                    result_dict['strategy_params'] = None
-            
-            if result_dict.get('result_data'):
-                try:
-                    result_dict['result_data'] = json.loads(result_dict['result_data'])
-                except:
-                    result_dict['result_data'] = None
-            
-            return {
-                "status": "success",
-                "data": result_dict
-            }
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"백테스트 히스토리 상세 조회 중 오류: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="백테스트 히스토리 상세 조회 실패"
-        )
+    # 히스토리 상세 조회는 제거됨 — 공유 URL 기반으로 설정을 복원하도록 안내합니다.
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="백테스트 히스토리 영속화는 FastAPI에서 지원하지 않습니다. 공유 URL을 사용하세요."
+    )
 
 
 @router.delete(
@@ -878,40 +759,50 @@ async def delete_backtest_history(
     
     - **history_id**: 삭제할 히스토리 ID
     """
-    user_info = None  # 인증 제거됨
-    user_id = user_info["user_id"]
-    
+    # 삭제 API는 더 이상 지원되지 않습니다.
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="백테스트 히스토리 영속화는 FastAPI에서 지원하지 않습니다. 공유 URL을 사용하세요."
+    )
+
+
+@router.post(
+    "/share",
+    status_code=status.HTTP_200_OK,
+    summary="백테스트 설정 공유 URL 생성",
+    description="백테스트 요청 파라미터를 받아 프론트엔드에서 사용할 수 있는 쿼리스트링을 반환합니다."
+)
+async def create_share_url(request: BacktestRequest):
+    """백테스트 설정을 쿼리스트링으로 직렬화하여 반환합니다."""
     try:
-        engine = _get_engine()
-        with engine.begin() as conn:
-            # 소유권 확인 및 삭제
-            result = conn.execute(text(
-                """
-                UPDATE backtest_history 
-                SET is_deleted = 1 
-                WHERE id = :hid AND user_id = :uid AND is_deleted = 0
-                """
-            ), {"hid": history_id, "uid": user_id})
-            
-            if result.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="백테스트 히스토리를 찾을 수 없습니다."
-                )
-            
-            return {
-                "status": "success",
-                "message": "백테스트 히스토리가 삭제되었습니다."
+        # 필드 선별 (민감 정보 제외)
+        params = {
+            "ticker": request.ticker,
+            "start_date": str(request.start_date),
+            "end_date": str(request.end_date),
+            "initial_cash": request.initial_cash,
+            "strategy": request.strategy,
+        }
+        # 전략 파라미터는 JSON 문자열로 인코딩
+        if getattr(request, 'strategy_params', None):
+            params['strategy_params'] = json.dumps(request.strategy_params, separators=(',', ':'))
+
+        # 간단한 쿼리스트링 생성 (URL 인코딩)
+        from urllib.parse import urlencode
+        qs = urlencode(params)
+        base_frontend_url = os.getenv('FRONTEND_BASE_URL', 'https://app.example.com/backtest')
+        share_url = f"{base_frontend_url}?{qs}"
+
+        return {
+            "status": "success",
+            "data": {
+                "share_url": share_url,
+                "querystring": qs
             }
-            
-    except HTTPException:
-        raise
+        }
     except Exception as e:
-        logger.error(f"백테스트 히스토리 삭제 중 오류: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="백테스트 히스토리 삭제 실패"
-        )
+        logger.error(f"공유 URL 생성 실패: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="공유 URL 생성 중 오류가 발생했습니다.")
 
 
 @router.post(
